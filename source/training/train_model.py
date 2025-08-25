@@ -582,7 +582,7 @@ def main(model: Type[AbstractModel] | str,
                     metrics_file_path = metrics_file_path
                 )
 
-            else: raise TypeError(f"model must be either a type or a string, not {type(model)}.")
+            # else: raise TypeError(f"model must be either a type or a string, not {type(model)}.")
 
         except InterruptedTrainException as error:
             return error.model, error.save_state, error.metrics

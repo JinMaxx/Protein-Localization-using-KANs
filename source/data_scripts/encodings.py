@@ -34,7 +34,7 @@ from typing_extensions import override, Optional
 from concurrent.futures import ThreadPoolExecutor
 from transformers import AutoTokenizer, EsmModel, T5EncoderModel, T5Tokenizer, PreTrainedTokenizer
 
-from source.data_scripts.read_data import SequenceData, SequenceEncodingData, Label, read_fasta, list_fasta_files
+from source.data_scripts.read_data import SequenceEncodingData, Label, read_fasta, list_fasta_files
 from source.config import EncodingsConfig, ConfigType, parse_config
 
 from source.custom_types import (

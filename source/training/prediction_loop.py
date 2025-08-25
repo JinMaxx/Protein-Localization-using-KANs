@@ -22,7 +22,7 @@ import warnings
 from abc import ABC
 from tqdm import tqdm
 from torch.nn import CrossEntropyLoss
-from typing_extensions import List, Dict, Any, override
+from typing_extensions import List, Dict, Any, Optional, override
 
 from source.models.abstract import AbstractModel
 from source.training.data_handling import _BaseDataHandler
@@ -67,7 +67,7 @@ class PredictionLoop(ABC):
         self.data_handler: _BaseDataHandler = data_handler
         self.data_loader: Data_Loader_T = data_handler.create_dataloader(collate_function=model.collate_function)
 
-        weights_tensor: torch.Tensor | None = None
+        weights_tensor: Optional[torch.Tensor] = None
         if use_weights:
             # Ensure weights are ordered correctly according to class labels
             weights: List[float] = [data_handler.class_weights[label] for label in sorted(data_handler.class_weights.keys(), key=lambda l: l.value)]

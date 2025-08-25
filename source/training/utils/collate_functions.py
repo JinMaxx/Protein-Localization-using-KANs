@@ -170,15 +170,14 @@ def per_protein_collate_function(
         # For each per-residue encoding, calculate with the chosen pooling method across the sequence dimension (dim=0)
         # [seq_len, in_channels] -> [in_channels]
 
-        # noinspection PyUnreachableCode
         match pool_method:
             case PoolingMethod.Mean: return torch.mean(valid_encoding, dim=0).values
             case PoolingMethod.Max:  return torch.max(valid_encoding, dim=0).values
             case PoolingMethod.Sum:  return torch.sum(valid_encoding, dim=0).values
-            case _: raise ValueError(f"Invalid pooling method: {pool_method}")
+            # case _: raise ValueError(f"Invalid pooling method: {pool_method}")
 
 
-    per_protein_encodings: Encoding_PerProtein_T = [pool(enc, mask) for enc, mask in zip(encodings, attention_masks)]
+    per_protein_encodings: List[Encoding_PerProtein_T] = [pool(enc, mask) for enc, mask in zip(encodings, attention_masks)]
 
     # Stack along the batch dimension (dim=0) -> [batch_size, in_channels]
     encodings_batch = torch.stack(per_protein_encodings, dim=0)

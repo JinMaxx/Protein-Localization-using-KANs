@@ -70,8 +70,7 @@ class HiddenLayers:
                 raise ValueError(f"RELATIVE type requires a tuple of (float, int). Got: {value}")
             self.value = value
 
-        else:
-            raise ValueError(f"Invalid hidden layers type: {self.kind}")
+        # else: raise ValueError(f"Invalid hidden layers type: {self.kind}")
 
 
     def calculate_layers(self, input_dim: int) -> list[int]:
@@ -87,7 +86,6 @@ class HiddenLayers:
         """
         hidden_layers: list[int]
 
-        # noinspection PyUnreachableCode
         match self.kind:
 
             # Exact sizes of layers. (e.g. [525_000, 100_000, 20_000, 1_000, 100])
@@ -119,8 +117,7 @@ class HiddenLayers:
                             f"One or more layer sizes in {hidden_layers} are less than 2 * num_classes ({2 * num_classes}).")
                         # hidden_layers.remove(layer)
 
-            case _:
-                raise ValueError(f"Invalid hidden layers type: {self.kind}")
+            # case _: raise ValueError(f"Invalid hidden layers type: {self.kind}")
 
 
         # print(f"Exact hidden layers: {hidden_layers}")
@@ -137,9 +134,8 @@ class HiddenLayers:
 
     def __len__(self) -> int:
         """Returns the number of hidden layers defined by this configuration."""
-        # noinspection PyUnreachableCode
         match self.kind:
             case HiddenLayers.Type.EXACT: return len(self.value)
             # case HiddenLayers.Type.REDUCTION: return len(self.value)
             case HiddenLayers.Type.RELATIVE: return self.value[1]
-            case _: raise ValueError(f"Invalid hidden layers type: {self.kind}")
+            # case _: raise ValueError(f"Invalid hidden layers type: {self.kind}")

@@ -14,7 +14,12 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from plotly.graph_objs import Figure
 from scipy.spatial.distance import pdist
-from typing_extensions import Optional, cast, List, Callable, Dict, override
+from typing_extensions import (
+    Literal, TypeAlias,
+    Optional, Callable,
+    List, Dict,
+    override, cast
+)
 
 from source.data_scripts.read_data import Label
 from source.abstract_figures import AbstractFiguresCollection, _AbstractFigure, get_label_color
@@ -24,6 +29,16 @@ from source.custom_types import Sequence_Encoding_Data_Generator_T, Seq_Enc_Data
 class PoolingType(Enum):
     Per_Protein_Mean = 0
     Per_Protein_Max = 1
+
+
+DistanceMetric: TypeAlias = Literal[
+    "euclidean",
+    "cosine",
+    "cityblock",
+    "minkowski",
+    "hamming",
+    "jaccard"
+]
 
 
 
@@ -94,7 +109,7 @@ class DataFiguresCollection(AbstractFiguresCollection):
 
     def pairwise_distance_distribution(self,
             bins: int = 150,
-            distance_metric: str = "euclidean",
+            distance_metric: DistanceMetric = "euclidean",
             pooling_type: PoolingType = PoolingType.Per_Protein_Mean
     ) -> 'PairwiseDistanceDistributionFigure':
         """
@@ -388,11 +403,11 @@ class PairwiseDistanceDistributionFigure(_AbstractDataFigure):
     def __init__(self,
             collection: AbstractFiguresCollection,
             bins: int = 150,
-            distance_metric: str = "euclidean",
+            distance_metric: DistanceMetric = "euclidean",
             pooling_type: PoolingType = PoolingType.Per_Protein_Mean):
         super().__init__(collection=collection)
         self._bins: int = bins
-        self._metric: str = distance_metric
+        self._metric: DistanceMetric = distance_metric
         self._pooling_type: PoolingType = pooling_type
         self._base_title = "Pairwise Embedding Distance Distribution"
         self._fig.update_layout(
@@ -427,20 +442,19 @@ class PairwiseDistanceDistributionFigure(_AbstractDataFigure):
 
         for i, seq_data in enumerate(seq_enc_data_generator):
             if max_samples is not None and i >= max_samples: break
-            # noinspection PyUnreachableCode, DuplicatedCode
             match self._pooling_type:
                 case PoolingType.Per_Protein_Mean:  embeddings.append(seq_data.get_encoding().mean(axis=0))
                 case PoolingType.Per_Protein_Max: embeddings.append(seq_data.get_encoding().max(axis=0))
-                case _: raise ValueError(f"Incorrect Encoding Type: {self._pooling_type.name}")
+                # case _: raise ValueError(f"Incorrect Encoding Type: {self._pooling_type.name}")
 
         if not embeddings: return
 
         distances = pdist(np.stack(embeddings), metric=self._metric)
 
         self._fig.add_histogram(
-            x=distances,
-            nbinsx=self._bins,
-            marker_color="orchid"
+            x = distances,
+            nbinsx = self._bins,
+            marker_color = "orchid"
         )
 
 
@@ -487,11 +501,10 @@ class _AbstractEncodingsVisualizationFigure(_AbstractDataFigure):
         labels: List[Label] = []
         colors: List[str] = []
         for seq_data in seq_enc_data_generator:
-            # noinspection PyUnreachableCode, DuplicatedCode
             match self._pooling_type:
                 case PoolingType.Per_Protein_Mean:  embeddings.append(seq_data.get_encoding().mean(axis=0))
                 case PoolingType.Per_Protein_Max: embeddings.append(seq_data.get_encoding().max(axis=0))
-                case _: raise ValueError(f"Incorrect Encoding Type: {self._pooling_type.name}")
+                # case _: raise ValueError(f"Incorrect Encoding Type: {self._pooling_type.name}")
             labels.append(seq_data.label)
             colors.append(get_label_color(seq_data.label))
 

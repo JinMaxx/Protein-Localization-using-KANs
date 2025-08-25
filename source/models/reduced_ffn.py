@@ -15,7 +15,7 @@ Each concrete model is configured via its associated `ConfigType`.
 
 from abc import ABC
 
-from typing_extensions import cast, Optional, Type, List, override
+from typing_extensions import Type, Optional, List, Dict, override, cast
 
 from source.models.ffn import AbstractFFN, FastKAN, MLP
 from source.models.abstract import AbstractSequenceModel
@@ -66,7 +66,7 @@ class AbstractReducedFFN(AbstractSequenceModel, ABC):
             hidden_layers: HiddenLayers,
             reduction_layer_class: Type[AbstractReductionLayer],
             ffn_layer_class: Type[AbstractFFN],
-            ffn_layer_kwargs: Optional[dict] = None,
+            ffn_layer_kwargs: Optional[Dict] = None,
             out_channels: Optional[int] = None,
             reduced_channels: Optional[int] = None):
         super().__init__(
@@ -75,14 +75,14 @@ class AbstractReducedFFN(AbstractSequenceModel, ABC):
             in_seq_len = in_seq_len
         )
         
-        self.reduced_seq_len = reduced_seq_len
-        self.reduced_channels = reduced_channels if reduced_channels is not None else self.in_channels
-        self.hidden_layers = hidden_layers
-        self.reduction_layer_class = reduction_layer_class
-        self.ffn_model_class = ffn_layer_class
-        self.ffn_layer_kwargs = ffn_layer_kwargs if ffn_layer_kwargs is not None else {}
+        self.reduced_seq_len: int = reduced_seq_len
+        self.reduced_channels: int = reduced_channels if reduced_channels is not None else self.in_channels
+        self.hidden_layers: HiddenLayers = hidden_layers
+        self.reduction_layer_class: Type[AbstractReductionLayer] = reduction_layer_class
+        self.ffn_model_class: Type[AbstractFFN] = ffn_layer_class
+        self.ffn_layer_kwargs: Dict = ffn_layer_kwargs if ffn_layer_kwargs is not None else {}
 
-        self.reduction_layer: reduction_layer_class = \
+        self.reduction_layer: AbstractReductionLayer = \
             reduction_layer_class(
                 in_channels = self.in_channels,
                 in_seq_len = self.in_seq_len,

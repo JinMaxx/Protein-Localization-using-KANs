@@ -593,14 +593,13 @@ class AbstractFFNConfig(AbstractTunableModelConfig, ABC):
 
         self.hidden_layers: HiddenLayers
         if self.hidden_layer_relative is not None:
-            if isinstance(self.hidden_layer_relative, float):
-                if not 0.0 <= self.hidden_layer_relative <= 1.0:
-                    raise ValueError("Hidden layer reduction size must be between [0.0: 1.0].")
-            elif isinstance(self.hidden_layer_relative, int):
+            if isinstance(self.hidden_layer_relative, int):
                 if not 1 <= self.hidden_layer_relative <= 100:
                     raise ValueError("Hidden layer reduction size must be between [1: 100].")
                 self.hidden_layer_relative: float = self.hidden_layer_relative / 100.0
-            else: raise ValueError("Hidden layer reduction size must be a float or an integer.")
+            elif isinstance(self.hidden_layer_relative, float):
+                if not 0.0 <= self.hidden_layer_relative <= 1.0:
+                    raise ValueError("Hidden layer reduction size must be between [0.0: 1.0].")
             if self.num_hidden_layers is None: raise ValueError("Number of hidden layers must be specified.")
             if self.num_hidden_layers < 0: raise ValueError("Number of hidden layers must be positive")
             # noinspection PyAttributeOutsideInit

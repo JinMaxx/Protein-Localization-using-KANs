@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 from typing_extensions import Tuple, Union, Generator, Callable, TypeAlias, List, Annotated
 
-from source.data_scripts.read_data import SequenceData, SequenceEncodingData, num_classes
+from source.data_scripts.read_data import SequenceData, SequenceEncodingData
 
 
 

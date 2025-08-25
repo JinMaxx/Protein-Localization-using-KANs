@@ -177,7 +177,7 @@ class AbstractFiguresCollection(ABC):
     # When the parameter figure is initially None, then no figure exists yet until provided by the update_function and nothing will be displayed.
     # If update_function returns a figure, it replaces the existing one.
     def other(self,
-            figure: Figure | None,
+            figure: Optional[Figure],
             update_function: UpdateFunctionT,
             identifier: Optional[str] = None,
             name: Optional[str] = None) -> CustomFigureT:
@@ -222,7 +222,7 @@ class _AbstractFigure(ABC):
     """
 
     def __init__(self, collection: AbstractFiguresCollection, figure: Optional[Figure] = None, identifier: Optional[str] = None):
-        self._fig: Figure | None = figure
+        self._fig: Optional[Figure] = figure
         if self._fig is not None: set_centralized_theme(self._fig)
         self._identifier: str = identifier if identifier is not None else str(uuid.uuid4())  # used for unique file_paths
         self.__collection: AbstractFiguresCollection = collection
