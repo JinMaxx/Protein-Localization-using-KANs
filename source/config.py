@@ -414,7 +414,7 @@ class RangeParameterFloat(AbstractTestParameter):
             raise ValueError(f"max ({self.max}) must be greater than or equal to min ({self.min}).")
         if self.step is not None:
             if self.step <= 0.0:
-                if (math.isclose(self.step, 0.0, abs_tol=1e-6) and math.isclose((self.max - self.min), 0.0, abs_tol=1e-6)):
+                if not (math.isclose(self.step, 0.0, abs_tol=1e-6) and math.isclose((self.max - self.min), 0.0, abs_tol=1e-6)):
                     raise ValueError(f"step ({self.step}) must be positive.")
             else: # Check if the range is divisible by the step
                 range_val = self.max - self.min
