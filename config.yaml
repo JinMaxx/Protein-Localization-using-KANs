@@ -1,0 +1,759 @@
+# ----------------- Python Module Config ------------------
+
+# similar to the paper: "Light attention predicts protein location from the language of life"
+# From comparison with the paper and the code from train.py
+#Training:
+#  epochs: 2500 # Not seen in the paper but: --num_epochs default=2500
+#  patience: 80 # For early stopping as stated in paper.
+#  batch_size: 28 # Lower so my GPU Memory can handle my data and models.
+#  use_weights: false # They might have used weights but probably not as it is: --balanced_loss default=False
+#  weight_decay: 0.0 # They certainly did not use weight decay, but if so, it is done via --optimizer_parameters
+#  learning_rate: 0.00005 # As stated in the paper.
+#  learning_rate_decay: 1.0 # Constant learning rate as stated in the paper.
+
+
+Training:
+  epochs: 300 # Training is quite slow for me.
+  patience: 40 # Reasonable for me.
+  batch_size: 28 # Lower so my GPU Memory can handle my data and models.
+  use_weights: false # They might have used weights but probably not as it is: --balanced_loss default=False
+  weight_decay: 0.0 # They certainly did not use weight decay, but if so, it is done via --optimizer_parameters
+  learning_rate: 0.00005 # As stated in the paper.
+  learning_rate_decay: 1.0 # Constant learning rate as stated in the paper.
+
+#Training:
+#  epochs: 10
+#  patience: 5  # for early stopping
+#  batch_size: 28
+#  use_weights: true
+#  weight_decay: 0.0005 # 1e-4 until 1e-6. deactivate with 0.0
+#  learning_rate: 0.0005 # 1e-4 or 1e-3 mnist example
+#  learning_rate_decay: 0.85 # deactivate with 1.0
+
+
+HyperParam:
+  n_trials: 10  # trials
+  timeout: 14400  # 4-hour max: 60 sec/min * 60 min/hour * 4
+
+
+#Pruning:
+#  threshold: 0.05 # The maximum drop allowed from the first value
+#  difference_limit: 0.01 # The minimum improvement required
+#  stop_fn: difference
+
+
+Encodings:
+  threads: 8
+  batch_size: 16  # 32
+
+
+# High weights for accuracy, f1, auc_pr to handle imbalanced data.
+Metrics:
+  accuracy_weight: 8  # consider increasing
+  sensitivity_weight: 7
+  specificity_weight: 5
+  precision_weight: 6
+  f1_score_weight: 8
+  auc_roc_weight: 4
+  auc_pr_weight: 9
+#  model_size_weight: 4
+
+
+Evaluation:
+
+  batch_size: 28
+
+  # From "Light attention predicts protein location from the language of life"
+  # https://pmc.ncbi.nlm.nih.gov/articles/PMC9710637/
+
+  model_names:
+    - UniRep-FNN
+    - SeqVec-FNN
+    - ProtBert-FNN
+    - ESM-1b-FNN
+    - ProtT5-FNN
+    - UniRep-LA
+    - SeqVec-LA
+    - ProtBert-LA
+    - ESM-1b-LA
+    - ProtT5-LA
+
+  # deeploc_test_set
+  # accuracies:
+  #   - 0.68
+  #   - 0.71
+  #   - 0.76
+  #   - 0.80
+  #   - 0.82
+  #   - 0.71
+  #   - 0.76
+  #   - 0.80
+  #   - 0.83
+  #   - 0.86
+
+  # setHARD
+  accuracies:
+    - 0.49
+    - 0.52
+    - 0.53
+    - 0.60
+    - 0.61
+    - 0.55
+    - 0.57
+    - 0.58
+    - 0.62
+    - 0.65
+
+  # I can't read the values of the error bars from the figure.
+  # And I can't find the file protein-localization/data/results/paper_tables.CSV
+  # ./data is set in their .gitignore, so they have not pushed that file.
+  accuracies_errors:
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+    - .nan
+
+
+
+# -------------------- ML Model Config --------------------
+
+FastKAN: # input layer size per residue is 70 * 1024 = 71_680
+
+  # In its basic form mainly used for testing
+  in_seq_len: 20  # 70 # truncated (or padded) to the first 70 Encodings (should correlate to aminoacids)
+  hidden_layer_relative: 0.06  # small model with one hidden layer for debugging
+  num_hidden_layers: 1
+  hidden_layer_exact:
+
+  grid_diff: 2.0
+  # grid_min: -2.0
+  # grid_max: 2.0
+  num_grids: 7 # Was 5 for hyper param tuning. Increased for more accuracy.
+
+  test_parameters:
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 1
+      layer_size_percentage: !RangeFloat
+        min: 0.06
+        max: 0.08
+        step: 0.01
+    grid_diff: !RangeFloat
+      min: 1.5
+      max: 2.5
+      step: 0.5
+    num_grids: !RangeInt
+      min: 4
+      max: 8
+      step: 1
+
+
+MLP:
+
+  # Small model for testing
+  in_seq_len: 20
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+
+  test_parameters:
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 5
+      layer_size_percentage: !RangeFloat
+        min: 0.5
+        max: 0.8 # higher than for KANs
+        step: 0.01
+
+
+MLP_Per_Protein:
+
+  in_seq_len: 1024  # Dimension of ProtT5
+  hidden_layer_relative: 0.5
+  num_hidden_layers: 2
+  hidden_layer_exact:
+
+  test_parameters:
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 10
+      layer_size_percentage: !RangeFloat
+        min: 0.5
+        max: 0.8
+        step: 0.01
+
+
+MaxPoolFastKAN:
+  # epochs: 15, patience: 8, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 14
+  # - Loss: 2.0371
+  # - Accuracy: 64.148%
+  # - Precision (PPV): 68.505%
+  # - Recall (Sensitivity): 64.148%
+  # - Specificity (TNR): 97.965%
+  # - F1-Score: 62.601%
+  # - ROC AUC: 92.225%
+  # - PR AUC: 50.069%
+  # - Performance: 69.202%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 50
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.20
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+MaxPoolMLP:
+  # MLP version of MaxPoolFastKAN
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 50
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 6
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.80
+        step: 0.10
+
+
+AvgPoolFastKAN:
+  # epochs: 15, patience: 8, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 3
+  # - Samples: 1678
+  # - Loss: 1.4543
+  # - Accuracy: 67.552%
+  # - Precision (PPV): 68.449%
+  # - Recall (Sensitivity): 67.552%
+  # - Specificity (TNR): 95.988%
+  # - F1-Score: 67.173%
+  # - ROC AUC: 92.904%
+  # - PR AUC: 50.347%
+  # - Performance: 70.895%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.08
+  num_hidden_layers: 2
+  hidden_layer_exact:
+  reduced_seq_len: 30
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+AvgPoolMLP:
+  # MLP version of AvgPoolFastKAN
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 30
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 6
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.80
+        step: 0.10
+
+
+LinearFastKAN:
+  # epochs: 15, patience: 8, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 3
+  # - Loss: 1.3964
+  # - Accuracy: 66.421%
+  # - Precision (PPV): 68.231%
+  # - Recall (Sensitivity): 66.421%
+  # - Specificity (TNR): 97.634%
+  # - F1-Score: 65.376%
+  # - ROC AUC: 94.360%
+  # - PR AUC: 54.239%
+  # - Performance: 71.311%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.04
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 40
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+LinearMLP:
+  # MLP version of LinearFastKAN
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 40
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 6
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.80
+        step: 0.10
+
+
+AttentionFastKAN:
+  # epochs: 15, patience: 8, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 14
+  # - Loss: 2.1419
+  # - Accuracy: 75.207%
+  # - Precision (PPV): 78.693%
+  # - Recall (Sensitivity): 75.207%
+  # - Specificity (TNR): 98.698%
+  # - F1-Score: 74.892%
+  # - ROC AUC: 95.585%
+  # - PR AUC: 65.136%
+  # - Performance: 78.964%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 40
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 40
+      step: 5
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+AttentionMLP:
+  # epochs: 15, patience: 7, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 14
+  #- Loss: 1.16
+  #- Accuracy: 76.56%
+  #- Precision (PPV): 77.82%
+  #- Recall (Sensitivity): 76.56%
+  #- Specificity (TNR): 98.60%
+  #- F1-Score: 76.42%
+  #- ROC AUC: 95.08%
+  #- PR AUC: 70.46%
+  #- Performance: 79.45%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06  # 0.40
+  num_hidden_layers: 1  # 7
+  hidden_layer_exact:
+  reduced_seq_len: 40
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 40
+      step: 5
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 5
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.70
+        step: 0.10
+
+
+PositionalFastKAN:
+  # Epoch: 49
+  #- Loss: 2.2729
+  #- Accuracy: 72.583%
+  #- Precision (PPV): 78.817%
+  #- Recall (Sensitivity): 72.583%
+  #- Specificity (TNR): 99.343%
+  #- F1-Score: 71.256%
+  #- ROC AUC: 94.805%
+  #- PR AUC: 63.565%
+  #- Performance: 77.282%
+  in_seq_len: 1023   # * embeddings_dim=1024 = 1_047_552 (too much that's why dimension reduction)
+  hidden_layer_relative: 0.14
+  num_hidden_layers: 2
+  hidden_layer_exact:
+  reduced_seq_len: 10  # * embeddings_dim=1024 = 51_200
+  reduced_channels: 1024
+  grid_diff: 2.0
+  num_grids: 7
+
+  # You need an A100 to run this. Memory Consumption is huge.
+  # Even if the biggest Model in a Trial with those settings is around 4.5 GB
+  # the backpropagation takes more memory around 28 GB
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    reduced_channels: !RangeInt
+      min: 256
+      max: 1024
+      step: 64
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+PositionalMLP:
+  # MLP version of PositionalFastKAN
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 10
+  reduced_channels: 1024
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    reduced_channels: !RangeInt
+      min: 256
+      max: 1024
+      step: 64
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 6
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.80
+        step: 0.10
+
+
+UNetFastKAN:
+  # epochs: 15, patience: 8, batch_size: 28, learning_rate: 0.0005, learning_rate_decay: 0.85
+  # Epoch: 14
+  # - Loss: 1.5343
+  # - Accuracy: 69.484%
+  # - Precision (PPV): 74.070%
+  # - Recall (Sensitivity): 69.484%
+  # - Specificity (TNR): 98.922%
+  # - F1-Score: 67.745%
+  # - ROC AUC: 94.669%
+  # - PR AUC: 59.640%
+  # - Performance: 74.454%
+  in_seq_len: 1023
+  hidden_layer_relative: 0.04
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 40
+  reduced_channels: 1024
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    reduced_channels: !RangeInt
+      min: 256
+      max: 1024
+      step: 64
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1
+
+
+UNetMLP:
+  # MLP version of UNetFastKAN
+  in_seq_len: 1023
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+  reduced_seq_len: 40
+  reduced_channels: 1024
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    reduced_channels: !RangeInt
+      min: 256
+      max: 1024
+      step: 64
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 6
+      layer_size_percentage: !RangeFloat
+        min: 0.30
+        max: 0.80
+        step: 0.10
+
+
+AttentionLstmHybrid:
+
+  in_seq_len: 1023 # Input sequence length from ProtT5 embeddings
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+
+  attention_num_heads: 8
+  lstm_hidden_size: 256
+  lstm_num_layers: 1
+
+  test_parameters:
+    attention_num_heads: !Categorical
+      choices: [4, 8, 16]
+    lstm_hidden_size: !RangeInt
+      min: 128
+      max: 512
+      step: 32
+    lstm_num_layers: !RangeInt
+      min: 1
+      max: 4
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+
+
+LstmReductionHybrid:
+
+  in_seq_len: 1023 # Input sequence length from ProtT5 embeddings
+  hidden_layer_relative: 0.06
+  num_hidden_layers: 1
+  hidden_layer_exact:
+
+  reduced_seq_len: 40
+
+  lstm_hidden_size: 256
+  lstm_num_layers: 2
+  dropout_rate: 0.10
+
+  test_parameters:
+    reduced_seq_len: !RangeInt
+      min: 10
+      max: 60
+      step: 10
+    lstm_hidden_size: !RangeInt
+      min: 128
+      max: 512
+      step: 32
+    lstm_num_layers: !RangeInt
+      min: 1
+      max: 4
+    dropout_rate: !RangeFloat
+      min: 0.1
+      max: 0.5
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+
+
+LightAttention:
+
+  in_seq_len: 1023  # Input sequence length from ProtT5 embeddings
+  hidden_layer_relative:
+  num_hidden_layers:
+  hidden_layer_exact: [32]
+
+  kernel_size: 9
+  conv_dropout_rate: 0.25
+  ffn_dropout_rate: 0.25
+
+  test_parameters:
+    kernel_size: !RangeInt
+      min: 3
+      max: 11
+      step: 2
+    conv_dropout_rate: !RangeFloat
+      min: 0.1
+      max: 0.5
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 4
+      layer_size_percentage: !RangeFloat
+        min: 0.2
+        max: 0.6
+        step: 0.1
+
+
+LightAttentionFastKAN:
+  # FastKAN version of LightAttention
+  in_seq_len: 1023  # Input sequence length from ProtT5 embeddings
+  hidden_layer_relative:
+  num_hidden_layers:
+  hidden_layer_exact: [32]  # TODO: change later if optimal settings found.
+
+  kernel_size: 9
+  conv_dropout_rate: 0.25
+  ffn_dropout_rate: 0.25
+
+  grid_diff: 2.0
+  num_grids: 7
+
+  test_parameters:
+    kernel_size: !RangeInt
+      min: 3
+      max: 11
+      step: 2
+    conv_dropout_rate: !RangeFloat
+      min: 0.1
+      max: 0.5
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 1
+        max: 3
+      layer_size_percentage: !RangeFloat
+        min: 0.02
+        max: 0.24
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 2.0
+      max: 2.0
+      step: 0.0
+    num_grids: !RangeInt
+      min: 4
+      max: 6
+      step: 1

@@ -1,0 +1,12 @@
+# Python virtual environment
+/.venv/
+
+# PyCharm project settings
+/.idea/
+
+# Just: https://github.com/casey/just
+/just
+
+# Content generated during runtime
+#/data/
+#!/data/saved_models/onehot/Debug_TestModel_FastKAN.pth
