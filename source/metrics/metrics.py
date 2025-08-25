@@ -51,7 +51,6 @@ from source.custom_types import (
     Loss_T,
     Prob_T,
     Label_T,
-    Logit_T,
     Prediction_Generator_T
 )
 
@@ -154,7 +153,7 @@ class Metrics:
             "predicted_labels": [label.value for label in self.__predicted_labels],
             "predicted_probs": [p.tolist() for p in self.__predicted_probs],
             "losses": self.__losses,
-            "class_weights": {k.value: v for k, v in self.__class_weights.items()} if self._class_weights else None,
+            "class_weights": {k.value: v for k, v in self.__class_weights.items()} if self.__class_weights else None,
         }
 
 
@@ -163,18 +162,12 @@ class Metrics:
         """
         Factory method to reconstruct a Metrics object from a serialized dictionary.
         """
-        true_labels = [Label(v) for v in data["true_labels"]]
-        predicted_labels = [Label(v) for v in data["predicted_labels"]]
-        predicted_probs = [tensor(p) for p in data["predicted_probs"]]
-        losses = data["losses"]
-        class_weights = {Label(k): v for k, v in data["class_weights"].items()} if data.get("class_weights") else None
-
         return cls(
-            true_labels = true_labels,
-            predicted_labels = predicted_labels,
-            predicted_probs = predicted_probs,
-            losses = losses,
-            class_weights = class_weights
+            true_labels = [Label(v) for v in data["true_labels"]],
+            predicted_labels = [Label(v) for v in data["predicted_labels"]],
+            predicted_probs = [tensor(p) for p in data["predicted_probs"]],
+            losses = data["losses"],
+            class_weights = {Label(k): v for k, v in data["class_weights"].items()} if data.get("class_weights") else None
         )
 
 
@@ -586,7 +579,7 @@ class Metrics:
         for true_label, probs in zip(self.__true_labels, self.__predicted_probs):
             true_label: Label
             probs: Prob_T
-            confidence_distribution[true_label].append(probs[true_label.value])
+            confidence_distribution[true_label].append(probs[true_label.value].item())
 
         return confidence_distribution
 
