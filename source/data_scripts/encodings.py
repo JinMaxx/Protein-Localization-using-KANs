@@ -34,7 +34,7 @@ from typing_extensions import override, Optional
 from concurrent.futures import ThreadPoolExecutor
 from transformers import AutoTokenizer, EsmModel, T5EncoderModel, T5Tokenizer, PreTrainedTokenizer
 
-from source.data_scripts.read_data import SequenceEncodingData, Label, read_fasta, list_fasta_files
+from source.data_scripts.read_data import SequenceData, SequenceEncodingData, Label, read_fasta, list_fasta_files
 from source.config import EncodingsConfig, ConfigType, parse_config
 
 from source.custom_types import (
@@ -73,7 +73,7 @@ class AbstractEncodingModel(ABC):
 
 
     @abstractmethod
-    def encode(self, seq_data_batch: list["SequenceData"]) -> Sequence_Encoding_Data_Generator_T:
+    def encode(self, seq_data_batch: list[SequenceData]) -> Sequence_Encoding_Data_Generator_T:
         """
         Encodes a batch of sequence data.
 
@@ -141,7 +141,7 @@ class OneHotEncodingModel(AbstractEncodingModel):
 
 
     @override
-    def encode(self, seq_data_batch: list["SequenceData"]) -> Sequence_Encoding_Data_Generator_T:
+    def encode(self, seq_data_batch: list[SequenceData]) -> Sequence_Encoding_Data_Generator_T:
         """
         Generates one-hot encodings for a batch of sequences.
 
@@ -200,7 +200,7 @@ class AbstractEmbeddingModel(AbstractEncodingModel):
 
 
     @override  # template method pattern
-    def encode(self, seq_data_batch: list["SequenceData"]) -> Sequence_Encoding_Data_Generator_T:
+    def encode(self, seq_data_batch: list[SequenceData]) -> Sequence_Encoding_Data_Generator_T:
         """
         Template method to generate embeddings for a batch of sequences.
 
@@ -235,7 +235,7 @@ class AbstractEmbeddingModel(AbstractEncodingModel):
 
     #### Hooks ####
 
-    def _preprocess(self, seq_data_batch: list["SequenceData"]) -> None:
+    def _preprocess(self, seq_data_batch: list[SequenceData]) -> None:
         """
         Hook for any model-specific preprocessing. Can be overridden by subclasses.
 
@@ -272,7 +272,7 @@ class ProtT5(AbstractEmbeddingModel):
 
 
     @override
-    def _preprocess(self, seq_data_batch: list["SequenceData"]) -> None:
+    def _preprocess(self, seq_data_batch: list[SequenceData]) -> None:
         """Adds spaces between amino acids as required by ProtT5."""
         for sequence_data in seq_data_batch:
             sequence_data.record.seq = Seq(" ".join(str(sequence_data.record.seq)))
