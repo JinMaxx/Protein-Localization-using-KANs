@@ -16,15 +16,17 @@ Key features include:
   from training epochs becomes available.
 """
 
-from typing import Dict, Set
-
 import numpy as np
 import plotly.graph_objects as go
 
-from math import ceil
+from math import ceil, isclose
 from abc import abstractmethod, ABC
-from typing_extensions import Any, Optional, List, cast, override, overload
 
+from optuna import Study
+from optuna.visualization import plot_optimization_history
+from typing_extensions import Any, Optional, List, Dict, Set, Union, Tuple, cast, override, overload
+
+from source.config import ParamInfo
 from source.metrics.metrics import Metrics, PerformanceMetric
 from source.metrics.metrics_figures import MetricsFiguresCollection
 from source.abstract_figures import _AbstractFigure, AbstractFiguresCollection
@@ -58,6 +60,17 @@ class HyperParamFiguresCollection(AbstractFiguresCollection):
         return cast(HyperParamPerformance, self._add(HyperParamPerformance(identifier=identifier, collection=self)))
 
 
+    def hyper_param_parameter(self, study: Study, param_name: str, param_info: ParamInfo, identifier: Optional[str] = None) -> 'HyperParamParameter':
+        """Creates and adds a figure for plotting hyperparameter optimization history."""
+        return cast(HyperParamParameter, self._add(HyperParamParameter(
+            study = study,
+            param_name = param_name,
+            param_info = param_info,
+            identifier = identifier,
+            collection = self
+        )))
+
+
     @override
     def update(self, performances: List[float], clear: bool = True, **kwargs) -> None:
         """
@@ -71,7 +84,12 @@ class HyperParamFiguresCollection(AbstractFiguresCollection):
 
 
 
-class HyperParamPerformance(_AbstractFigure):
+class _AbstractHyperParamFigure(_AbstractFigure, ABC):
+    """An abstract base class for figures related to hyperparameter optimization trials."""
+
+
+
+class HyperParamPerformance(_AbstractHyperParamFigure):
     """A figure that plots the performance metric across successive hyperparameter trials."""
 
     def __init__(self, collection: HyperParamFiguresCollection, identifier: Optional[str] = None):
@@ -101,6 +119,93 @@ class HyperParamPerformance(_AbstractFigure):
         self._fig.data[0].x = list(range(len(performances)))
         self._fig.data[0].y = performances
 
+
+
+class HyperParamParameter(_AbstractHyperParamFigure):
+    """
+    A figure that plots the optimization history for a single hyperparameter,
+    showing its value across successive trials.
+    """
+
+    def __init__(self,
+            study: Study,
+            param_name: str,
+            param_info: ParamInfo,
+            collection: HyperParamFiguresCollection,
+            identifier: Optional[str] = None):
+        """
+        Initializes the hyperparameter history plot.
+
+        Args:
+            study: The Optuna study object.
+            param_name: The name of the hyperparameter to plot.
+            param_info: Metadata about the parameter (e.g., range, type).
+            collection: The collection this figure belongs to.
+            identifier: An optional unique identifier.
+        """
+        self.__study: Study = study
+        self.__param_name: str = param_name
+        self.__y_axis: Dict[str, Any]
+
+        existing_values = [
+            trial.params[self.__param_name] for trial in self.__study.trials if self.__param_name in trial.params
+        ]
+
+        if param_info.type == 'linear':
+
+            _range: Optional[Tuple[Union[int, float], Union[int, float]]] = None
+            _step: Optional[Union[int, float]] = None
+
+            if existing_values:
+                _range = (
+                    min(min(existing_values), param_info.range[0]),
+                    max(max(existing_values), param_info.range[1])
+                )
+                if isclose(_range[0], param_info.range[0], abs_tol=1e-6) and isclose(_range[1], param_info.range[1], abs_tol=1e-6):
+                    _step = param_info.step
+                else: _step = 1 if _range is None else (_range[1] - _range[0]) / 10
+            else:
+                _range = param_info.range
+                _step = param_info.step
+
+            self.__y_axis = dict(
+                range = _range,
+                dtick = _step
+            )
+
+        elif param_info.type == 'category':
+            self.__y_axis = dict(
+                type = 'category',
+                categoryorder = 'array',
+                categoryarray = sorted(list(set(param_info.categories + existing_values)))
+            )
+
+        super().__init__(collection=collection, identifier=identifier, figure=self.__create_figure())
+
+
+    def __create_figure(self) -> go.Figure:
+        return plot_optimization_history(
+            study = self.__study,
+            target_name = self.__param_name.replace("_", " ").capitalize(),
+            target = lambda trial: trial.params[self.__param_name]
+        ).update_layout(
+            xaxis = dict(
+                range = [0, len(self.__study.trials)],
+                dtick = 2
+            ),
+            yaxis = self.__y_axis
+        )
+
+
+    @override
+    def update(self, **kwargs) -> None:
+        """Re-generates the optimization history plot with the latest trial data."""
+        self._fig = self.__create_figure()
+
+
+    @override
+    def name(self) -> str:
+        return self.__param_name
 
 
 # -------------------------------- Epoch Figures --------------------------------

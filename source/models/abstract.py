@@ -326,8 +326,8 @@ def _create_test_model_class(model_class: Type[AbstractTunableModel], **kwargs) 
             return super().config_type()
 
         @override
-        def forward(self, x: Encodings_Batch_T, attention_mask: AttentionMask_Batch_T = None) -> Logits_Batch_T:
-            return super().forward(x, attention_mask)
+        def forward(self, x: Encodings_Batch_T, attention_mask: AttentionMask_Batch_T) -> Logits_Batch_T:
+            return super().forward(x=x, attention_mask=attention_mask)
 
         @override
         def collate_function(self, batch: List[Data_T]) -> tuple[Encodings_Batch_T, Labels_Batch_T, AttentionMask_Batch_T]:

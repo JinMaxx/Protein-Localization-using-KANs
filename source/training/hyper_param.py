@@ -12,22 +12,21 @@ It also generates visualizations of the tuning process.
 import os
 import gc
 import uuid
+
 import torch
 import optuna
 
 from optuna import Trial, Study
 from optuna.samplers import TPESampler as Sampler  # GPSampler, TPESampler. Which Sampler might be better...?
-from optuna.visualization import plot_optimization_history
 
-from typing_extensions import Type, Optional, Tuple, cast
+from typing_extensions import List, Type, Optional, Tuple
 from contextlib import nullcontext, AbstractContextManager
 
 from source.metrics.metrics import Metrics
-from source.abstract_figures import UpdateFunctionT
 from source.models.abstract import AbstractTunableModel
 from source.training.train_model import train_new as train, SaveState
-from source.training.training_figures import HyperParamFiguresCollection
 from source.training.utils.context_manager import TeeStdout, OptionalTempDir
+from source.training.training_figures import HyperParamFiguresCollection, _AbstractHyperParamFigure
 
 from source.config import TrainingConfig, HyperParamConfig, ConfigType, parse_config
 
@@ -166,7 +165,7 @@ def tune(
                 metrics.save_metrics_to_tsv(
                     metrics_file_path,
                     model = model.id(),
-                    model_class = model.__class__.__name__,  # usually the same as study_name
+                    # model_class = model.__class__.__name__,  # usually the same as study_name  TODO: Uncomment afterwards!
                     memory_size = model.memory_size(),
                     epoch = save_state.current_epoch(),
                     study_name = study_name,
@@ -224,47 +223,22 @@ def tune(
 
         # Set up visualization for the tuning process
         figures: HyperParamFiguresCollection = HyperParamFiguresCollection(save_dir=figures_save_dir)
-        grid_figures = [
-            figures.other(
-                figure = None,
-                name = f"Trial-{param_name}",
-                identifier = study_name,
-                update_function = cast(
-                    UpdateFunctionT,
-                    lambda
-                        fig,
-                        # need defaults, otherwise the lambda will capture the last value
-                        # by reference of the last variable in the loop.
-                        param_name = param_name,
-                        plot_info = plot_info,
-                        *arg, **kwargs:
-                    plot_optimization_history(  # replot
-                        study,
-                        target_name = param_name.replace("_", " ").capitalize(),
-                        target = lambda trial, param=param_name: trial.params[param]
-                    ).update_layout(
-                        xaxis = dict(
-                            range = [0, len(study.trials)],
-                            dtick = 2
-                        ),
-                        # Dynamically build the yaxis dictionary based on plot_info
-                        yaxis = (
-                            dict(
-                                range = plot_info.range,
-                                dtick = plot_info.step
-                            ) if plot_info.type == 'linear' else dict(
-                                type = 'category',
-                                categoryorder = 'array',
-                                categoryarray = plot_info.categories
-                            )
-                        )
-
-                    )
-                )
-            ) for param_name, plot_info in model_class.get_config().test_parameters_info()
+        grid_figures: List[_AbstractHyperParamFigure] = [
+            figures.hyper_param_parameter(
+                study = study,
+                param_name = param_name,
+                param_info = param_info,
+                identifier = f"{param_name}_{study_name}"
+            ) for param_name, param_info in model_class.get_config().test_parameters_info()
         ]
         grid_figures.append(figures.hyper_param_performance(identifier=study_name))
         figures.multifigure(figures=grid_figures, show_legend=False, identifier=study_name)
+
+        # If possible (study is continued), display figures at the start.
+        if any(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials):
+            print("Displaying existing study history...")
+            figures.update(clear=False, performances=[t.value for t in study.trials if t.state.is_finished()])
+            figures.display(clear=False)
 
         # Run the optimization
         study.optimize(

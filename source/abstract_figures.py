@@ -367,7 +367,8 @@ class MultiFigure(_AbstractFigure):
                     "linewidth": 1,
                     "zeroline": False
                 }
-
+            if axis_config_x.get("title"): axis_config_x.setdefault("title", None).update(standoff=5)
+            if axis_config_y.get("title"): axis_config_y.setdefault("title", None).update(standoff=5)
             self._fig.update_xaxes(row=row, col=col, **axis_config_x)
             self._fig.update_yaxes(row=row, col=col, **axis_config_y)
 
