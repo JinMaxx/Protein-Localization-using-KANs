@@ -367,13 +367,19 @@ class RangeParameterInt(AbstractTestParameter):
     @override
     def trial_parameter(self, name: str, trial: Trial) -> int:
         """Suggests an integer value to Optuna."""
-        if self.min == self.max or self.step == 0: return self.min
-        return trial.suggest_int(
-            name = name,
-            low = self.min,
-            high = self.max,
-            step = self.step
-        )
+        if self.min == self.max or self.step == 0:
+            return trial.suggest_int(
+                name = name,
+                low = self.min,
+                high = self.min
+            )
+        else:
+            return trial.suggest_int(
+                name = name,
+                low = self.min,
+                high = self.max,
+                step = self.step
+            )
 
     @override
     def get_info(self, name: str) -> dict[str, ParamInfo]:
@@ -427,13 +433,19 @@ class RangeParameterFloat(AbstractTestParameter):
     @override
     def trial_parameter(self, name: str, trial: Trial) -> float:
         """Suggests a float value to Optuna."""
-        if math.isclose(self.min, self.max, abs_tol=1e-6) or math.isclose(self.step, 0.0, abs_tol=1e-6): return self.min
-        return trial.suggest_float(
-            name = name,
-            low = self.min,
-            high = self.max,
-            step = self.step
-        )
+        if math.isclose(self.min, self.max, abs_tol=1e-6) or math.isclose(self.step, 0.0, abs_tol=1e-6):
+            return trial.suggest_float(
+                name = name,
+                low = self.min,
+                high = self.min
+            )
+        else:
+            return trial.suggest_float(
+                name = name,
+                low = self.min,
+                high = self.max,
+                step = self.step
+            )
 
 
     @override
