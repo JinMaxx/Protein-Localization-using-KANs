@@ -163,10 +163,11 @@ class HyperParamParameter(_AbstractHyperParamFigure):
                 )
                 if isclose(_range[0], param_info.range[0], abs_tol=1e-6) and isclose(_range[1], param_info.range[1], abs_tol=1e-6):
                     _step = param_info.step
-                else: _step = 1 if _range is None else (_range[1] - _range[0]) / 10
             else:
                 _range = param_info.range
                 _step = param_info.step
+
+            if _step is None: _step = 1 if _range is None else (_range[1] - _range[0]) / 10
 
             self.__y_axis = dict(
                 range = _range,
