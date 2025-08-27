@@ -167,7 +167,7 @@ class Metrics:
             predicted_labels = [Label(v) for v in data["predicted_labels"]],
             predicted_probs = [tensor(p) for p in data["predicted_probs"]],
             losses = data["losses"],
-            class_weights = {Label(k): v for k, v in data["class_weights"].items()} if data.get("class_weights") else None
+            class_weights = {Label(int(k)): v for k, v in data["class_weights"].items()} if data.get("class_weights") else None
         )
 
 
