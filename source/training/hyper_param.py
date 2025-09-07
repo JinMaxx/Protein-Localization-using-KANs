@@ -136,9 +136,9 @@ def tune(
                     patience = patience,
                     epochs = epochs,
                     figures_save_dir = figures_save_dir,
+                    metrics_file_path = None,  # Already saving metrics here.
                     model_save_dir = None  # Not saving models because of storage constraints.
-
-                )
+                )                          # (only saving the best model of study)
                 model: AbstractTunableModel
                 save_state: SaveState
                 metrics: Metrics
@@ -164,11 +164,11 @@ def tune(
             if metrics_file_path is not None:
                 metrics.save_metrics_to_tsv(
                     metrics_file_path,
-                    model = model.id(),
-                    # model_class = model.__class__.__name__,  # usually the same as study_name  TODO: Uncomment afterwards!
+                    model_id = model.id(),
+                    model_class = model.__class__.__name__,
                     memory_size = model.memory_size(),
                     epoch = save_state.current_epoch(),
-                    study_name = study_name,
+                    study_name = study_name,  # usually the same as model_class but can be different
                     trial_number = trial.number,
                     trial_params = list(trial.params.items())
                 )
@@ -252,7 +252,7 @@ def tune(
         )
 
         figures.display(clear=False)
-        figures.save(f"hyper_param/{study_name}")
+        figures.save(sub_dir=f"study_evaluation/{study_name}")
         del figures
 
 

@@ -433,8 +433,8 @@ class RangeParameterFloat(AbstractTestParameter):
     @override
     def trial_parameter(self, name: str, trial: Trial) -> float:
         """Suggests a float value to Optuna."""
-        if math.isclose(self.min, self.max, abs_tol=1e-6) or (
-                self.step is not None and math.isclose(self.step, 0.0, abs_tol=1e-6)):
+        if (math.isclose(self.min, self.max, abs_tol=1e-6)
+                or (self.step is not None and math.isclose(self.step, 0.0, abs_tol=1e-6))):
             return trial.suggest_float(
                 name = name,
                 low = self.min,

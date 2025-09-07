@@ -15,10 +15,10 @@ Key features include:
 - An object-oriented design that allows figures to be dynamically updated as new data
   from training epochs becomes available.
 """
-
 import numpy as np
 import plotly.graph_objects as go
 
+from copy import deepcopy
 from math import ceil, isclose
 from abc import abstractmethod, ABC
 
@@ -423,24 +423,12 @@ class EpochDualAxisFigure(_AbstractEpochFigure):
             model_name = model_name,
             epochs = epochs,
             collection = collection,
-            identifier = identifier
+            identifier = identifier  # if identifier is not None else f"{self.fig_left.name()}__{self.fig_right.name()}"
         )
 
         # unregister from figures
         self.fig_left.remove()
         self.fig_right.remove()
-
-        # Layout with dual y-axis
-        self._fig.update_layout(
-            xaxis = self.fig_left._fig.layout.xaxis,  # epoch axis
-            legend = dict(  # Move legend further to the right by setting x > 1
-                x = 1.05,  # so it does not clash with the values of yaxis2
-                xanchor = "left",  # anchor the left edge of legend
-                y = 1,  # top aligned (default)
-                yanchor = "top"
-            )
-
-        )
 
         self.__refresh_traces()
         self.__update_layout()
@@ -464,16 +452,19 @@ class EpochDualAxisFigure(_AbstractEpochFigure):
 
 
     def __update_layout(self) -> None:
+        yaxis2_layout = deepcopy(self.fig_right._fig.layout.yaxis)  # Using deepcopy for robustness
+        yaxis2_layout.update(overlaying='y', side='right')  # Add dual-axis specific properties
+
         # Layout with dual y-axis
         self._fig.update_layout(
             title = f"{self.fig_left.__class__.__name__} & {self.fig_right.__class__.__name__} (epoch: {self._current_epoch()}) | {self.model_name}",
             yaxis = self.fig_left._fig.layout.yaxis,
-            yaxis2 = self.fig_right._fig.layout.yaxis
-        )
-        self._fig.update_layout(
-            yaxis2 = dict(
-                overlaying = 'y',
-                side = 'right'
+            yaxis2 = yaxis2_layout,
+            legend = dict(  # Move legend further to the right by setting x > 1
+                x = 1.05,  # so it does not clash with the values of yaxis2
+                xanchor = "left",  # anchor the left edge of legend
+                y = 1,  # top aligned (default)
+                yanchor = "top"
             )
         )
 

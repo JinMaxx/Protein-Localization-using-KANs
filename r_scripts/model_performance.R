@@ -9,14 +9,14 @@ library(stringr)
 # 0. Configuration
 ################################################
 
-metrics_file <- "./data/logging/Rostlab/prot_t5_xl_uniref50/hyper_param_metrics_filtered.tsv"
+metrics_file <- "./data/logging/Rostlab/prot_t5_xl_uniref50/hyper_param_metrics.tsv"
 
 output_dir <- "./data/preliminary_analysis/Rostlab/prot_t5_xl_uniref50"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 ffn_suffixes <- c("FastKAN", "MLP")  # suffic not in list will be Other
 
-architectures_comparrison <- c("MaxPool", "AvgPool", "Attention", "UNet", "Linear", "Positional")
+architectures_comparison <- c("MaxPool", "AvgPool", "Attention", "UNet", "Linear", "Positional")
 
 scatterplot_facet_order <- c(
   "MaxPool", "AvgPool", "Linear", "Attention", "Positional", "UNet",
@@ -42,10 +42,14 @@ metric_titles <- list(
 columns_to_keep_for_best_table <- c(
   "model_class", "performance", "accuracy", "f1_score", "sensitivity",
   "specificity", "precision", "roc_auc", "pr_auc", "memory_size",
-  "epoch", "trial_number", "trial_params", "model"
+  "epoch", "trial_number", "trial_params", "model_id"
 )
 
-columns_to_keep_for_sorted_trials_table <- c("model", "memory_size", "epoch", "trial_params")
+columns_to_keep_for_sorted_trials_table <- c(
+  "model_id", "memory_size", "epoch", "trial_params",
+  "accuracy", "f1_score", "sensitivity",
+  "specificity", "precision", "roc_auc", "pr_auc"
+)
 
 metrics_for_sorted_trial_tables <- c("accuracy")
 
@@ -63,6 +67,11 @@ average_performance <- tuning_data[class_name == "Average"]
 average_performance <- average_performance[epoch > 6]
 # filter out models that converged very early (sign of possible overfitting)
 
+# unrelevant for overall metrics
+average_performance <- average_performance[, class_weight := NULL]
+
+print(average_performance[, ])
+
 # Create columns for base architecture and FFN type
 suffix_pattern <- paste(ffn_suffixes, collapse = "|")
 
@@ -70,6 +79,11 @@ suffix_pattern <- paste(ffn_suffixes, collapse = "|")
 average_performance[, ffn_type := str_extract(model_class, suffix_pattern)]
 average_performance[, base_architecture := str_remove(model_class, suffix_pattern)]
 average_performance[is.na(ffn_type), ffn_type := "Other"]
+
+# Manual corrections for specific architectures that don't follow the suffix convention
+average_performance[base_architecture == "AttentionLstmHybrid", ffn_type := "FastKAN"]
+average_performance[base_architecture == "LstmReductionHybrid", ffn_type := "FastKAN"]
+average_performance[base_architecture == "LightAttention" & ffn_type == "Other", ffn_type := "MLP"]
 
 head(average_performance)
 
@@ -156,7 +170,7 @@ barchart <- function(summary_data, metric_name) {
       minor_breaks = seq(0, 1, by = 0.1)
     )+
     labs(
-      title = paste("Average Comparison of Architectures by", performance_title),
+      title = paste("Average Comparison of Rection Architectures by", performance_title),
       x = "Model Architecture",
       y = performance_title,
       fill = "Base Architecture",
@@ -291,7 +305,7 @@ save_table <- function(table_object, file_identifier) {
 # 5. Plotting and Table Generation
 ################################################
 
-barchart_summary_data <- architecture_summary[base_architecture %in% architectures_comparrison]
+barchart_summary_data <- architecture_summary[base_architecture %in% architectures_comparison]
 
 scatterplot_trial_data <- average_performance
 scatterplot_trial_data$base_architecture <- factor(scatterplot_trial_data$base_architecture, levels = scatterplot_facet_order)
@@ -300,7 +314,7 @@ scatterplot_trial_data$base_architecture <- factor(scatterplot_trial_data$base_a
 print("\nGenerating plots for custom 'performance' metric\n")
 save_plot(
   barchart(barchart_summary_data, "performance"),
-  "performance_comparrison_barchart"
+  "performance_comparison_barchart"
 )
 save_plot(
   scatterplot(scatterplot_trial_data, "performance"),
@@ -315,7 +329,7 @@ save_table(
 print("\nGenerating plots for 'accuracy' metric\n")
 save_plot(
   barchart(barchart_summary_data, "accuracy"),
-  "accuracy_comparrison_barchart"
+  "accuracy_comparison_barchart"
 )
 save_plot(
   scatterplot(scatterplot_trial_data, "accuracy"),
@@ -330,7 +344,7 @@ save_table(
 print("\nGenerating plots for 'F1-Score' metric\n")
 save_plot(
   barchart(barchart_summary_data, "f1_score"),
-  "f1_score_comparrison_barchart"
+  "f1_score_comparison_barchart"
 )
 save_plot(
   scatterplot(scatterplot_trial_data, "f1_score"),

@@ -38,8 +38,7 @@ training_config: TrainingConfig = parse_config(ConfigType.Training)
 __METRICS_SET: Set[PerformanceMetric] = {
     PerformanceMetric.ACCURACY,
     PerformanceMetric.F1_SCORE,
-    PerformanceMetric.PERFORMANCE,
-    PerformanceMetric.AUC_PR
+    PerformanceMetric.PERFORMANCE
 }
 
 
@@ -142,11 +141,12 @@ def __train(
                 if metrics_file_path is not None:
                     val_metrics.save_metrics_to_tsv(
                         metrics_file_path,
-                        train_loss_per_sample = train_loss_per_sample,
-                        validation_loss_per_sample = val_metrics.loss_per_sample,
-                        model = model.id(),
+                        model_id = model.id(),
+                        model_name = model.name(),
                         memory_size = model.memory_size(),
                         epoch = epoch,
+                        train_loss_per_sample=train_loss_per_sample,
+                        validation_loss_per_sample=val_metrics.loss_per_sample,
                     )
 
                 save_state.increment(
@@ -179,7 +179,7 @@ def __train(
                     patience_counter = 0
                     best_metrics = val_metrics
                     best_performance = val_performances[PerformanceMetric.PERFORMANCE]
-                    save_state.update(best_epoch = epoch)
+                    save_state.update(best_epoch=epoch)
                     figures.save(sub_dir=f"{model.name()}/{model.id()}", epoch=epoch)
                     best_model_file_path = model.save(
                         save_dir = model_save_dir,
