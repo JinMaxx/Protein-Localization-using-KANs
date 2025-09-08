@@ -341,6 +341,7 @@ class _AbstractLengthDistributionFigure(_AbstractDataFigure, ABC):
             **kwargs):
         self._fig.data = []
         if identifier is not None: self._identifier = identifier
+        if self._log_y and not self._identifier.endswith("_log"): self._identifier = f"{self._identifier}_log"
 
         title_prefix = f"{file_name}: " if file_name else ""
         self._fig.update_layout(title_text=f"{title_prefix}{self._base_title}")
