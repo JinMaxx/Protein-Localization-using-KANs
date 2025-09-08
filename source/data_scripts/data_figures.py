@@ -318,7 +318,7 @@ class _AbstractLengthDistributionFigure(_AbstractDataFigure, ABC):
         self._base_title = base_title
         self._fig.update_layout(
             title_text = base_title,
-            yaxis_title = "Count" if self._log_y else "log Count",
+            yaxis_title = "log Count" if self._log_y else "Count",
             xaxis = dict(rangemode='tozero'),  # Forces the x-axis to start at 0
             yaxis = dict(type='log' if self._log_y else 'linear', tickformat=',')
         )
