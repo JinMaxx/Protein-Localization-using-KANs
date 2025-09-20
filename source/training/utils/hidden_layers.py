@@ -90,7 +90,7 @@ class HiddenLayers:
 
             # Exact sizes of layers. (e.g. [525_000, 100_000, 20_000, 1_000, 100])
             case HiddenLayers.Type.EXACT:
-                hidden_layers = cast(List[int], self.value)
+                return cast(List[int], self.value)
 
 
             # Reduction relative to the previous layer size.
@@ -117,11 +117,10 @@ class HiddenLayers:
                             f"One or more layer sizes in {hidden_layers} are less than 2 * num_classes ({2 * num_classes}).")
                         # hidden_layers.remove(layer)
 
+                return hidden_layers
+
             # case _: raise ValueError(f"Invalid hidden layers type: {self.kind}")
 
-
-        # print(f"Exact hidden layers: {hidden_layers}")
-        return hidden_layers
 
 
     def __str__(self) -> str:

@@ -62,7 +62,6 @@ class ConfigType(Enum):
 
     Training = "Training"
     HyperParam = "HyperParam"
-    Pruning = "Pruning"
     Encodings = "Encodings"
     Metrics = "Metrics"
     Evaluation = "Evaluation"
@@ -70,6 +69,7 @@ class ConfigType(Enum):
     MLP = "MLP"
     MLP_PP = "MLP_Per_Protein"
     FastKAN = "FastKAN"
+    LightAttentionFFN = "LightAttentionFFN"
 
     MaxPoolFastKAN = "MaxPoolFastKAN"
     MaxPoolMLP = "MaxPoolMLP"
@@ -84,9 +84,10 @@ class ConfigType(Enum):
     UNetFastKAN = "UNetFastKAN"
     UNetMLP = "UNetMLP"
 
-    AttentionLstmHybrid = "AttentionLstmHybrid"
-    LstmReductionHybrid = "LstmReductionHybrid"
-    LightAttention = "LightAttention"
+    AttentionLstmHybridFastKAN = "AttentionLstmHybridFastKAN"
+    LstmAttentionReductionHybridFastKAN = "LstmAttentionReductionHybridFastKAN"
+
+    LightAttentionLAMLP = "LightAttention"
     LightAttentionFastKAN = "LightAttentionFastKAN"
 
 
@@ -263,6 +264,7 @@ class EvaluationConfig(BaseConfig):
     accuracies_errors: List[float]
 
     batch_size: int
+    iterations: int
 
     @override
     def validate(self):
@@ -278,6 +280,8 @@ class EvaluationConfig(BaseConfig):
             if math.isnan(accuracy_error): continue
             if not (0.0 <= accuracy_error <= 1.0):
                 raise ValueError(f"Accuracy error {accuracy_error} must be between [0.0: 1.0].")
+        if self.iterations < 1: raise ValueError(f"Iterations {self.iterations} must be at least 1.")
+        if self.batch_size < 1: raise ValueError(f"Batch size {self.batch_size} must be at least 1.")
 
 
 
@@ -310,7 +314,6 @@ class AbstractTestParameter(BaseConfig, ABC):
 
 
 
-
 @dataclass
 class CategoricalParameter(AbstractTestParameter):
     """Represents a hyperparameter chosen from a predefined list of values."""
@@ -339,6 +342,7 @@ class CategoricalParameter(AbstractTestParameter):
             type = 'category',
             categories = self.choices
         )}
+
 
 
 @dataclass
@@ -584,10 +588,7 @@ class AbstractFFNConfig(AbstractTunableModelConfig, ABC):
     """Base class for feed-forward network configurations."""
 
     in_seq_len: int
-
-    hidden_layer_relative: Optional[int|float]
-    num_hidden_layers:     Optional[int]
-    hidden_layer_exact:    Optional[List[int]]
+    hidden_layers: HiddenLayers
 
 
     @property
@@ -597,32 +598,10 @@ class AbstractFFNConfig(AbstractTunableModelConfig, ABC):
         return super().expected_test_parameters.union({'hidden_layers'})
 
 
-
     @override
     def validate(self):
         super().validate()
-
         if self.in_seq_len < 1: raise ValueError("Max input sequence length must be bigger than 0.")
-
-        self.hidden_layers: HiddenLayers
-        if self.hidden_layer_relative is not None:
-            if isinstance(self.hidden_layer_relative, int):
-                if not 1 <= self.hidden_layer_relative <= 100:
-                    raise ValueError("Hidden layer reduction size must be between [1: 100].")
-                self.hidden_layer_relative: float = self.hidden_layer_relative / 100.0
-            elif isinstance(self.hidden_layer_relative, float):
-                if not 0.0 <= self.hidden_layer_relative <= 1.0:
-                    raise ValueError("Hidden layer reduction size must be between [0.0: 1.0].")
-            if self.num_hidden_layers is None: raise ValueError("Number of hidden layers must be specified.")
-            if self.num_hidden_layers < 0: raise ValueError("Number of hidden layers must be positive")
-            # noinspection PyAttributeOutsideInit
-            self.hidden_layers = HiddenLayers(HiddenLayers.Type.RELATIVE, (self.hidden_layer_relative, self.num_hidden_layers))
-        elif self.hidden_layer_exact is not None:
-            for hidden_layer_exact in self.hidden_layer_exact:
-                if  0 >= hidden_layer_exact: raise ValueError("Exact hidden layer size must be bigger than 0.")
-            # noinspection PyAttributeOutsideInit
-            self.hidden_layers = HiddenLayers(HiddenLayers.Type.EXACT, self.hidden_layer_exact)
-        else: raise ValueError("Either hidden layer reduction size or hidden layer exact sizes must be specified.")
 
 
 
@@ -709,6 +688,19 @@ class MLPPPConfig(AbstractFFNConfig):
 
 
 @dataclass
+class LightAttentionFFNConfig(AbstractFFNConfig):
+
+    dropout_rate: float
+
+    @override
+    def validate(self) -> None:
+        super().validate()
+        if not (0.0 <= self.dropout_rate < 1.0):
+            raise ValueError(f"dropout_rate must be in the range [0.0, 1.0), but got {self.dropout_rate}")
+
+
+
+@dataclass
 class ReducedFastKANConfig(AbstractKANConfig, AbstractReducedFFNConfig, ABC):
     """A KAN model that operates on a reduced sequence length."""
     pass
@@ -759,47 +751,106 @@ class LinearMLPConfig(AbstractReducedFFNConfig):
 
 
 @dataclass
-class AttentionFastKANConfig(ReducedFastKANConfig):
+class AbstractAttentionConfig(AbstractTunableModelConfig, ABC):
+    """Mixin for configs using an AttentionLayer, adding num_heads."""
+    num_heads: int
+
+    @property
+    @override
+    def expected_test_parameters(self) -> Set[str]:
+        return super().expected_test_parameters.union({'num_heads'})
+
+    @override
+    def validate(self):
+        super().validate()
+        if self.num_heads <= 0:
+            raise ValueError("num_heads must be a positive integer.")
+
+
+
+@dataclass
+class AttentionFastKANConfig(AbstractAttentionConfig, ReducedFastKANConfig):
     pass
 
 
 
 @dataclass
-class AttentionMLPConfig(AbstractReducedFFNConfig):
+class AttentionMLPConfig(AbstractAttentionConfig, AbstractReducedFFNConfig):
     pass
 
 
 
 @dataclass
-class PositionalFastKANConfig(ReducedWChannelsFastKANConfig):
+class AbstractPositionalConfig(AbstractTunableModelConfig, ABC):
+    """Mixin for configs using PositionalWeightedConvLayer, adding kernel_size and weights_scalar."""
+    kernel_size: int
+    weights_scalar: float
+
+    @property
+    @override
+    def expected_test_parameters(self) -> Set[str]:
+        return super().expected_test_parameters.union({'kernel_size', 'weights_scalar'})
+
+    @override
+    def validate(self):
+        super().validate()
+        if self.kernel_size <= 0 or self.kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be a positive odd integer.")
+        if self.weights_scalar <= 0:
+            raise ValueError("weights_scalar must be a positive float.")
+
+
+
+@dataclass
+class PositionalFastKANConfig(AbstractPositionalConfig, ReducedWChannelsFastKANConfig):
     pass
 
 
 
 @dataclass
-class PositionalMLPConfig(AbstractReducedWChannelsFFNConfig):
+class PositionalMLPConfig(AbstractPositionalConfig, AbstractReducedWChannelsFFNConfig):
     pass
 
 
 
 @dataclass
-class UNetFastKANConfig(ReducedWChannelsFastKANConfig):
+class AbstractUNetConfig(AbstractTunableModelConfig, ABC):
+    """Mixin for configs using UNetReductionLayer, adding kernel_size."""
+    kernel_size: int
+
+    @property
+    @override
+    def expected_test_parameters(self) -> Set[str]:
+        return super().expected_test_parameters.union({'kernel_size'})
+
+    @override
+    def validate(self):
+        super().validate()
+        if self.kernel_size <= 0 or self.kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be a positive odd integer.")
+
+
+
+@dataclass
+class UNetFastKANConfig(AbstractUNetConfig, ReducedWChannelsFastKANConfig):
     pass
 
 
 
 @dataclass
-class UNetMLPConfig(AbstractReducedWChannelsFFNConfig):
+class UNetMLPConfig(AbstractUNetConfig, AbstractReducedWChannelsFFNConfig):
     pass
 
 
 
 @dataclass
-class AttentionLstmHybridConfig(AbstractFFNConfig):
+class AbstractAttentionLstmHybridConfig(AbstractFFNConfig):
 
     attention_num_heads: int
     lstm_hidden_size: int
     lstm_num_layers: int
+    dropout1_rate: float
+    dropout2_rate: float
 
 
     @property
@@ -818,11 +869,19 @@ class AttentionLstmHybridConfig(AbstractFFNConfig):
             raise ValueError(f"lstm_hidden_size must be a positive integer, but got {self.lstm_hidden_size}")
         if self.lstm_num_layers <= 0:
             raise ValueError(f"lstm_num_layers must be a positive integer, but got {self.lstm_num_layers}")
+        if not 0 <= self.dropout1_rate <= 1 or not 0 <= self.dropout2_rate <= 1:
+            raise ValueError(f"Dropout rate must be in range [0:1]. dropout_1: {self.dropout1_rate}, dropout_2: {self.dropout2_rate}")
 
 
 
 @dataclass
-class LstmReductionHybridConfig(AbstractReducedFFNConfig):
+class AttentionLstmHybridFastKANConfig(AbstractAttentionLstmHybridConfig, AbstractKANConfig):
+    pass
+
+
+
+@dataclass
+class AbstractLstmReductionHybridConfig(AbstractReducedFFNConfig, ABC):
 
     lstm_hidden_size: int
     lstm_num_layers: int
@@ -849,12 +908,16 @@ class LstmReductionHybridConfig(AbstractReducedFFNConfig):
 
 
 @dataclass
-class LightAttentionConfig(AbstractFFNConfig):
+class LstmAttentionReductionHybridFastKANConfig(AbstractLstmReductionHybridConfig, AbstractAttentionConfig, AbstractKANConfig):
+    pass
+
+
+
+@dataclass
+class AbstractLightAttentionConfig(AbstractFFNConfig, ABC):
 
     kernel_size: int
     conv_dropout_rate: float
-    ffn_dropout_rate: float  # Try [0.1; 0.5]
-
 
     @property
     @override
@@ -869,13 +932,31 @@ class LightAttentionConfig(AbstractFFNConfig):
             raise ValueError(f"kernel_size must be a positive integer, but got {self.kernel_size}")
         if not (0.0 <= self.conv_dropout_rate < 1.0):
             raise ValueError(f"conv_dropout_rate must be in the range [0.0, 1.0), but got {self.conv_dropout_rate}")
-        if not (0.0 <= self.ffn_dropout_rate < 1.0):
-            raise ValueError(f"ffn_dropout_rate must be in the range [0.0, 1.0), but got {self.ffn_dropout_rate}")
+
 
 
 @dataclass
-class LightAttentionFastKANConfig(LightAttentionConfig, AbstractKANConfig):
+class LightAttentionFastKANConfig(AbstractLightAttentionConfig, AbstractKANConfig):
     pass
+
+
+
+@dataclass
+class LightAttentionLAMLPConfig(AbstractLightAttentionConfig):
+
+    ffn_dropout_rate: float  # Try [0.1; 0.5]
+
+    @property
+    @override
+    def expected_test_parameters(self) -> Set[str]:
+        return super().expected_test_parameters.union({'ffn_dropout_rate'})
+
+    @override
+    def validate(self):
+        super().validate()
+        if not (0.0 <= self.ffn_dropout_rate < 1.0):
+            raise ValueError(f"ffn_dropout_rate must be in the range [0.0, 1.0), but got {self.ffn_dropout_rate}")
+
 
 
 # ---------------------------------------------------------
@@ -883,6 +964,8 @@ class LightAttentionFastKANConfig(LightAttentionConfig, AbstractKANConfig):
 class ConfigLoader(yaml.SafeLoader):
     """A custom YAML loader to construct our specific dataclasses from tags."""
     pass
+
+
 
 def _constructor_factory(cls):
     """A factory to create constructor functions for our dataclasses."""
@@ -897,11 +980,62 @@ def _constructor_factory(cls):
             raise TypeError(f"Unsupported YAML node type for constructing '{cls.__name__}': {type(node).__name__}")
     return constructor
 
+
+
+def _construct_hidden_layers_relative(loader: yaml.Loader, node: yaml.MappingNode) -> HiddenLayers:
+    """Constructs a RELATIVE HiddenLayers object from a mapping node."""
+    data = loader.construct_mapping(node, deep=True)
+    num_layers = data.get('num_layers')
+    relative_size = data.get('relative_size')
+
+    if num_layers is None or relative_size is None:
+        raise ValueError("!HiddenLayersRelative requires both 'num_layers' and 'relative_size' keys.")
+    if not isinstance(num_layers, int):
+        raise TypeError(f"!HiddenLayersRelative 'num_layers' must be an integer, but got {type(num_layers).__name__}.")
+    if not isinstance(relative_size, (float, int)):
+        raise TypeError(f"!HiddenLayersRelative 'relative_size' must be a float or int, but got {type(relative_size).__name__}.")
+    if not num_layers > 0:
+        raise ValueError(f"'num_layers' must be positive, but got {num_layers}.")
+    if isinstance(relative_size, int): # Allow integer percentages (1-100) and convert them, or standard floats (0.0-1.0)
+        if not 1 <= relative_size <= 100:
+            raise ValueError(f"Integer 'relative_size' must be between 1 and 100. Got: {relative_size}")
+        relative_size = float(relative_size) / 100.0
+    else: # It's a float
+        if not 0.0 < relative_size <= 1.0:
+            raise ValueError(f"Float 'relative_size' must be between 0.0 (exclusive) and 1.0. Got: {relative_size}")
+
+    return HiddenLayers(
+        kind = HiddenLayers.Type.RELATIVE,
+        value = (relative_size, num_layers)
+    )
+
+
+
+def _construct_hidden_layers_exact(loader: yaml.Loader, node: yaml.SequenceNode) -> HiddenLayers:
+    """Constructs an EXACT HiddenLayers object from a sequence node with full validation."""
+    layers = loader.construct_sequence(node, deep=True)
+
+    if not all(isinstance(layer, int) for layer in layers):
+        raise TypeError(f"All values for !HiddenLayersExact must be integers. Found: {layers}")
+    if not all(layer > 0 for layer in layers):
+        raise ValueError(f"All layer sizes for !HiddenLayersExact must be positive. Found: {layers}")
+
+    return HiddenLayers(
+        kind = HiddenLayers.Type.EXACT,
+        value = layers
+    )
+
+
+
 # Register constructors for custom YAML tags
+ConfigLoader.add_constructor('!HiddenLayersRelative', _construct_hidden_layers_relative)
+ConfigLoader.add_constructor('!HiddenLayersExact', _construct_hidden_layers_exact)
+
 ConfigLoader.add_constructor('!Categorical', _constructor_factory(CategoricalParameter))
 ConfigLoader.add_constructor('!RangeInt', _constructor_factory(RangeParameterInt))
 ConfigLoader.add_constructor('!RangeFloat', _constructor_factory(RangeParameterFloat))
 ConfigLoader.add_constructor('!HiddenLayers', _constructor_factory(HiddenLayersParameter))
+
 
 
 def __load_from_yaml(config_path: str = __config_path) -> dict:
@@ -910,6 +1044,7 @@ def __load_from_yaml(config_path: str = __config_path) -> dict:
         with open(config_path, "r") as file: return yaml.load(file, Loader=ConfigLoader)
     except FileNotFoundError: raise ValueError(f"Configuration file not found: {config_path}")
     except yaml.YAMLError as e: raise ValueError(f"Error parsing YAML file: {e}")
+
 
 
 def parse_config(config_type: ConfigType, config_path: str = __config_path):
@@ -945,6 +1080,7 @@ def parse_config(config_type: ConfigType, config_path: str = __config_path):
         case ConfigType.MLP: config = MLPConfig(**yaml_dict[ConfigType.MLP.value])
         case ConfigType.MLP_PP: config = MLPPPConfig(**yaml_dict[ConfigType.MLP_PP.value])
         case ConfigType.FastKAN: config = FastKANConfig(**yaml_dict[ConfigType.FastKAN.value])
+        case ConfigType.LightAttentionFFN: config = LightAttentionFFNConfig(**yaml_dict[ConfigType.LightAttentionFFN.value])
 
         case ConfigType.MaxPoolFastKAN: config = MaxPoolFastKANConfig(**yaml_dict[ConfigType.MaxPoolFastKAN.value])
         case ConfigType.MaxPoolMLP: config = MaxPoolMLPConfig(**yaml_dict[ConfigType.MaxPoolMLP.value])
@@ -959,9 +1095,10 @@ def parse_config(config_type: ConfigType, config_path: str = __config_path):
         case ConfigType.UNetFastKAN: config = UNetFastKANConfig(**yaml_dict[ConfigType.UNetFastKAN.value])
         case ConfigType.UNetMLP: config = UNetMLPConfig(**yaml_dict[ConfigType.UNetMLP.value])
 
-        case ConfigType.AttentionLstmHybrid: config = AttentionLstmHybridConfig(**yaml_dict[ConfigType.AttentionLstmHybrid.value])
-        case ConfigType.LstmReductionHybrid: config = LstmReductionHybridConfig(**yaml_dict[ConfigType.LstmReductionHybrid.value])
-        case ConfigType.LightAttention: config = LightAttentionConfig(**yaml_dict[ConfigType.LightAttention.value])
+        case ConfigType.AttentionLstmHybridFastKAN: config = AttentionLstmHybridFastKANConfig(**yaml_dict[ConfigType.AttentionLstmHybridFastKAN.value])
+        case ConfigType.LstmAttentionReductionHybridFastKAN: config = LstmAttentionReductionHybridFastKANConfig(**yaml_dict[ConfigType.LstmAttentionReductionHybridFastKAN.value])
+
+        case ConfigType.LightAttentionLAMLP: config = LightAttentionLAMLPConfig(**yaml_dict[ConfigType.LightAttentionLAMLP.value])
         case ConfigType.LightAttentionFastKAN: config = LightAttentionFastKANConfig(**yaml_dict[ConfigType.LightAttentionFastKAN.value])
 
         case _: raise ValueError(f"Invalid config type: {config_type}")

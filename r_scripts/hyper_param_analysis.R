@@ -11,12 +11,23 @@ library(stringr)
 
 metrics_file <- "./data/logging/Rostlab/prot_t5_xl_uniref50/hyper_param_metrics.tsv"
 
-output_dir <- "./data/preliminary_analysis/Rostlab/prot_t5_xl_uniref50"
+output_dir <- "./data/hyper_param_analysis/Rostlab/prot_t5_xl_uniref50"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 ffn_suffixes <- c("FastKAN", "MLP")  # suffic not in list will be Other
 
-architectures_comparison <- c("MaxPool", "AvgPool", "Attention", "UNet", "Linear", "Positional")
+# Only comparing reduction techniques.
+architectures_comparison <- c(
+  "MaxPool",
+  "AvgPool",
+  "Attention",
+  "UNet",
+  "Linear",
+  "Positional"
+  #"AttentionLstmHybrid",
+  #"LstmReductionHybrid",
+  #"LightAttention"
+)
 
 scatterplot_facet_order <- c(
   "MaxPool", "AvgPool", "Linear", "Attention", "Positional", "UNet",
@@ -155,6 +166,13 @@ barchart <- function(summary_data, metric_name) {
       aes(label = paste0("N=", trial_count)),
       vjust = -2.5,
       size = 3.0,
+      position = position_dodge(0.9)
+    ) +
+    geom_text(
+      aes(label = sprintf("%.0f%%", .data[[metric_col]] * 100)),
+      vjust = 4.0,
+      color = "black",
+      size = 3.5,
       position = position_dodge(0.9)
     ) +
     scale_alpha_manual(

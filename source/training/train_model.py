@@ -18,8 +18,8 @@ Key functionalities include:
 import os
 import torch
 
-from typing_extensions import Type, Tuple, Optional, Dict, Set
 from contextlib import AbstractContextManager, nullcontext
+from typing_extensions import Type, Tuple, Optional, Dict, Set
 
 from source.training.utils.context_manager import TeeStdout, OptionalTempDir
 
@@ -27,10 +27,14 @@ from source.models.abstract import AbstractModel
 from source.training.utils.save_state import SaveState
 from source.metrics.metrics import Metrics, PerformanceMetric
 from source.training.prediction_loop import Trainer, Validator
-from source.training.training_figures import TrainingFiguresCollection
+from source.training.training_figures import EpochFiguresCollection
+from source.metrics.metrics_figures import MetricsFiguresCollection
+from source.training.training_report import generate_training_report
+# from source.training.training_figures import TrainingFiguresCollection
 from source.training.data_handling import DataHandler, read_files as read_data_handlers
 
 from source.config import TrainingConfig, ConfigType, parse_config
+
 
 training_config: TrainingConfig = parse_config(ConfigType.Training)
 
@@ -45,7 +49,7 @@ __METRICS_SET: Set[PerformanceMetric] = {
 
 class InterruptedTrainException(KeyboardInterrupt):
     """
-    A custom exception raised when training is interrupted by the user.
+    A custom exception raised when the user interrupts training.
 
     This exception extends KeyboardInterrupt and carries the model and its save state at the moment of interruption,
     allowing for graceful recovery and saving of the partial work.
@@ -64,7 +68,9 @@ def __train(
         train_data_handler: DataHandler,
         val_data_handler: DataHandler,
         save_state: SaveState,
-        figures: TrainingFiguresCollection,
+        # figures: TrainingFiguresCollection,
+        epoch_figures: EpochFiguresCollection,
+        metrics_figures: MetricsFiguresCollection,
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
         use_weights: bool = training_config.use_weights,
@@ -73,7 +79,7 @@ def __train(
         learning_rate_decay: float = training_config.learning_rate_decay,
         model_save_dir: Optional[str] = None,
         metrics_file_path: Optional[str] = None
-) -> Tuple[AbstractModel, SaveState, Optional[Metrics]]:
+) -> Tuple[AbstractModel, SaveState, Metrics]:
     """
     Executes the core training and validation loop for a given model.
 
@@ -84,7 +90,8 @@ def __train(
     :param train_data_handler: Data handler for the training dataset.
     :param val_data_handler: Data handler for the validation dataset.
     :param save_state: Object managing the model's state across epochs.
-    :param figures: Collection for generating and saving training plots.
+    :param epoch_figures: Collection for generating plots that track training progress across all epochs.
+    :param metrics_figures: Collection for generating detailed evaluation plots for the best-performing model state.
     :param epochs: The total number of epochs to train.
     :param patience: Number of epochs to wait for improvement before early stopping.
     :param use_weights: Whether to use class weights in the loss function.
@@ -138,30 +145,23 @@ def __train(
 
                 val_performances: Dict[PerformanceMetric, float] = val_metrics.get_all_metrics()
 
-                if metrics_file_path is not None:
-                    val_metrics.save_metrics_to_tsv(
-                        metrics_file_path,
-                        model_id = model.id(),
-                        model_name = model.name(),
-                        memory_size = model.memory_size(),
-                        epoch = epoch,
-                        train_loss_per_sample=train_loss_per_sample,
-                        validation_loss_per_sample=val_metrics.loss_per_sample,
-                    )
-
                 save_state.increment(
                     training_loss = train_loss_per_sample,
                     validation_loss = val_metrics.loss_per_sample,
                     performance_values = val_performances
                 )
-
-                figures.update(
-                    model_name = model.name(),
-                    metrics = val_metrics,
+                
+                epoch_figures.update(
                     epoch = epoch,
                     performance_values = val_performances,
                     train_loss = train_loss_per_sample,
-                    val_loss = val_metrics.loss_per_sample
+                    val_loss = val_metrics.loss_per_sample,
+                    clear = True
+                )
+                metrics_figures.update(
+                    model_name = model.name(),
+                    metrics = val_metrics,
+                    clear = False  # dont clear epoch figures
                 )
                 print(f"\nEpoch: {epoch}")
                 print(val_metrics.summary())
@@ -180,7 +180,7 @@ def __train(
                     best_metrics = val_metrics
                     best_performance = val_performances[PerformanceMetric.PERFORMANCE]
                     save_state.update(best_epoch=epoch)
-                    figures.save(sub_dir=f"{model.name()}/{model.id()}", epoch=epoch)
+                    metrics_figures.save(sub_dir=f"{model.name()}/{model.id()}", epoch=epoch)
                     best_model_file_path = model.save(
                         save_dir = model_save_dir,
                         identifier = model.id(),  # overwriting worse models (otherwise save as f"{model.id()}_epoch={epoch}")
@@ -193,6 +193,19 @@ def __train(
                         print(f"Best Performance: {best_performance:.4f} at Epoch: {epoch - patience_counter})")
                         break
 
+                if metrics_file_path is not None:
+                    val_metrics.save_metrics_to_tsv(
+                        metrics_file_path,
+                        model_id = model.id(),
+                        model_name = model.name(),
+                        memory_size = model.memory_size(),
+                        epoch = epoch,
+                        train_loss_per_sample=train_loss_per_sample,
+                        validation_loss_per_sample=val_metrics.loss_per_sample,
+                        model_params = model.get_init_params(),
+                        is_better_epoch = save_state.current_epoch() == epoch
+                    )
+
         except KeyboardInterrupt:
             print(f"Training interrupted at {epoch}")
             raise InterruptedTrainException(model, save_state, best_metrics)
@@ -201,15 +214,16 @@ def __train(
             print(f"Error during training: {str(e)}")
             raise e
 
-        # End of training
-        figures.save(sub_dir=f"{model.name()}/{model.id()}", epoch=epoch)
-
+        finally:
+            # End of training
+            epoch_figures.update(epoch_mark=(save_state.current_epoch(), "green")) # makes a nice line to highlight the best epoch
+            epoch_figures.save(sub_dir=f"{model.name()}/{model.id()}", epoch=epoch)
+        
         # Loading the best model
         try: model, save_state = SaveState.load(model_file_path=best_model_file_path)
         except Exception as e:
             print(f"Failed to load best model from {best_model_file_path}: {e}")
             raise e
-
 
     save_state.clean()
 
@@ -223,7 +237,10 @@ def train_wrap(
         save_state: SaveState,
         train_data_handler: DataHandler,
         val_data_handler: DataHandler,
-        figures: TrainingFiguresCollection,
+        figures_save_dir: str,
+        # figures: TrainingFiguresCollection,
+        # epoch_figures: EpochFiguresCollection,
+        # metrics_figures: MetricsFiguresCollection,
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
         use_weights: bool = training_config.use_weights,
@@ -240,7 +257,7 @@ def train_wrap(
     :param save_state: The initial state for training.
     :param train_data_handler: Data handler for training data.
     :param val_data_handler: Data handler for validation data.
-    :param figures: Collection for managing training plots.
+    :param figures_save_dir: Directory to save updated figures.
     :param epochs: Total number of epochs for this training run.
     :param patience: Patience for early stopping.
     :param use_weights: Whether to use class weights.
@@ -254,13 +271,54 @@ def train_wrap(
     print(f"Training Model:\n{model.id()}\n{model}")
     print(f"Model Configuration:\n{model.get_config()}\n")
 
+
+    # figures: TrainingFiguresCollection = TrainingFiguresCollection(save_dir=figures_save_dir)
+    epoch_figures: EpochFiguresCollection = EpochFiguresCollection(save_dir=figures_save_dir)
+    metrics_figures: MetricsFiguresCollection = MetricsFiguresCollection(save_dir=figures_save_dir)
+
+    # specific figures for training
+    figure_left = epoch_figures.training_loss(
+        model_name = model.name(),
+        identifier = model.id(),
+        epochs = epochs,
+        train_losses = save_state.training_loss_history if save_state.current_epoch() > 0 else None,
+        val_losses = save_state.validation_loss_history if save_state.current_epoch() > 0  else None
+    )
+    figure_right = epoch_figures.training_performance(
+            model_name = model.name(),
+            epochs = epochs,
+            performance_metrics = __METRICS_SET,
+            performance_data = save_state.performance_history if save_state.current_epoch() > 0 else None
+    )
+    epoch_figures.epoch_dual_axis_figure(
+        model_name = model.name(),
+        identifier = model.id(),
+        figure_left = figure_left,
+        figure_right = figure_right
+    )
+
+    # Visual marker for when training was continued.
+    if save_state.current_epoch() > 0:
+        epoch_figures.update(epoch_mark=(save_state.current_epoch(), "black"))
+
+    # specific figures for metrics
+    metrics_figures.duo_curves(identifier=model.id())
+    metrics_figures.metrics_heatmap(identifier=model.id())
+    metrics_figures.prediction_confidence_violin(identifier=model.id())
+
+    # specific figures for models (e.g. weight matrices, KAN representation, ...)
+    model.add_figures_collection(figures=metrics_figures)
+
+
     try:
         model, save_state, metrics = __train(
             model = model,
             train_data_handler = train_data_handler,
             val_data_handler = val_data_handler,
             save_state = save_state,
-            figures = figures,
+            # figures = figures,
+            epoch_figures = epoch_figures,
+            metrics_figures = metrics_figures,
             epochs = epochs,
             patience = patience,
             use_weights = use_weights,
@@ -276,24 +334,40 @@ def train_wrap(
 
         print(f"Training complete: {model.id()}")
         print(f"Best model at epoch: {save_state.current_epoch()}")
-        if metrics is not None: print(metrics.summary())
+        print(metrics.summary())
+
+        if figures_save_dir:
+            generate_training_report(
+                model = model,
+                best_metrics = metrics,
+                figures_save_dir = figures_save_dir
+            )
 
         return model, save_state, metrics
 
+    except InterruptedTrainException as error:
+        if figures_save_dir:
+            print("Generating partial report for interrupted run...")
+            generate_training_report(
+                model = error.model,
+                best_metrics = error.metrics, # Will be None if interrupted early
+                figures_save_dir = figures_save_dir
+            )
+        raise error # Re-raise the exception to stop the script
 
-    except Exception as e:
-        print(f"Error during training: {str(e)}")
+    except Exception as error:
+        print(f"Error during training: {str(error)}")
         if model_save_dir is not None:
             save_state.update(best_epoch=None)
             model.save(
                 model_save_dir,
-                identifier = f"{model.id()}_{e.__class__.__name__}",
+                identifier = f"{model.id()}_{error.__class__.__name__}",
                 save_state = save_state
             )
-        raise e
+        raise error
 
     finally:
-        del figures
+        del metrics_figures, epoch_figures
         torch.cuda.empty_cache()
 
 
@@ -339,29 +413,6 @@ def train_new(
 
     model: AbstractModel = model_class(in_channels=encoding_dim)
 
-    figures: TrainingFiguresCollection = TrainingFiguresCollection(save_dir=figures_save_dir)
-
-    # specific figures for training
-    figures.epoch_dual_axis_figure(
-        model_name = model.name(),
-        identifier = model.id(),
-        figure_left = figures.training_loss(model_name=model.name(), epochs=epochs),
-        figure_right = figures.training_performance(
-            model_name = model.name(),
-            epochs = epochs,
-            performance_metrics = __METRICS_SET
-        )
-    )
-
-    # specific figures for metrics
-    figures.duo_curves(identifier=model.id())
-    figures.metrics_heatmap(identifier=model.id())
-    figures.prediction_confidence_violin(identifier=model.id())
-
-
-    # specific figures for models (e.g. weight matrices, KAN representation, ...)
-    model.add_figures_collection(figures=figures)
-
     save_state: SaveState = SaveState()
 
     # noinspection DuplicatedCode
@@ -370,7 +421,10 @@ def train_new(
         save_state = save_state,
         train_data_handler = train_data_handler,
         val_data_handler = val_data_handler,
-        figures = figures,
+        figures_save_dir = figures_save_dir,
+        # figures = figures,
+        # epoch_figures = epoch_figures,
+        # metrics_figures = metrics_figures,
         epochs = epochs,
         patience = patience,
         use_weights = use_weights,
@@ -383,8 +437,6 @@ def train_new(
     model: AbstractModel
     save_state: SaveState
     metrics: Metrics
-
-    del figures
 
     return model, save_state, metrics
 
@@ -437,48 +489,16 @@ def train_continue(
 
     print(f"Current Epoch: {save_state.current_epoch()}")
 
-    figures: TrainingFiguresCollection = TrainingFiguresCollection(save_dir=figures_save_dir)
-
-    # specific figures for training
-    figure_left = figures.training_loss(
-        model_name = model.name(),
-        identifier = model.id(),
-        epochs = epochs,
-        train_losses = save_state.training_loss_history,
-        val_losses = save_state.validation_loss_history
-    )
-    figure_right = figures.training_performance(
-            model_name = model.name(),
-            epochs = epochs,
-            performance_metrics = __METRICS_SET,
-            performance_data = save_state.performance_history
-    )
-    for figure in [figure_left, figure_right]: figure.update(epoch_cut=save_state.current_epoch())
-    figures.epoch_dual_axis_figure(
-        model_name = model.name(),
-        identifier = model.id(),
-        figure_left = figure_left,
-        figure_right = figure_right
-    )
-
-    # specific figures for metrics
-    figures.duo_curves(identifier=model.id())
-    figures.metrics_heatmap(identifier=model.id())
-    figures.prediction_confidence_violin(identifier=model.id())
-
-    # specific figures for models (e.g. weight matrices, KAN representation, ...)
-    model.add_figures_collection(figures=figures)
-
-    # Visual marker for when training was continued.
-    figures.update(epoch_cut=save_state.current_epoch())
-
     # noinspection DuplicatedCode
     model, save_state, metrics = train_wrap(
         model = model,
         save_state = save_state,
         train_data_handler = train_data_handler,
         val_data_handler = val_data_handler,
-        figures = figures,
+        figures_save_dir = figures_save_dir,
+        # figures = figures,
+        # epoch_figures = epoch_figures,
+        # metrics_figures = metrics_figures,
         epochs = epochs,
         patience = patience,
         use_weights = use_weights,
@@ -492,14 +512,10 @@ def train_continue(
     save_state: SaveState
     metrics: Metrics
 
-    del figures
-
     return model, save_state, metrics
 
 
 
-# simply training a new initialized model for max epochs.
-#@typechecked
 def main(model: Type[AbstractModel] | str,
          train_encodings_file_path: str,
          val_encodings_file_path: str,
@@ -514,7 +530,7 @@ def main(model: Type[AbstractModel] | str,
          figures_save_dir: Optional[str] = None,
          metrics_file_path: Optional[str] = None,
          log_file_path: Optional[str] = None
-) -> Tuple[AbstractModel, SaveState, Metrics]:
+) -> Optional[Tuple[AbstractModel, SaveState, Optional[Metrics]]]:
     """
     Main entry point to start or continue a training process.
 
@@ -536,19 +552,26 @@ def main(model: Type[AbstractModel] | str,
     :param metrics_file_path: Path to save metrics.
     :param log_file_path: Optional path to redirect stdout to a log file.
     :return: A tuple of the trained model, its state, and performance metrics.
+             May not contain Metrics if training is interrupted.
     """
     context: AbstractContextManager = TeeStdout(filename=log_file_path) if log_file_path is not None else nullcontext()
     with context:  # saving std out to log_file_path for tuning.
 
-        print("Training.")
+        if model_save_dir is not None: model_save_dir = os.path.join(model_save_dir, "training")
+        if figures_save_dir is not None: figures_save_dir = os.path.join(figures_save_dir, "training")
+
+        print("################ Training ################")
         print(f"epochs: {epochs}, patience: {patience}, batch_size: {batch_size}")
-        print(f"weight_decay: {weight_decay}, learning_rate: {learning_rate}, learning_rate_decay: {learning_rate_decay}")
+        print(f"learning_rate: {learning_rate}, learning_rate_decay: {learning_rate_decay}")
+        print(f"use_weights: {use_weights}, weight_decay: {weight_decay}")
         print(f"train_data: {train_encodings_file_path}\nval_data: {val_encodings_file_path}")
         print(f"model_save_dir: {model_save_dir}\nfigures_save_dir: {figures_save_dir}")
+        print(f"metrics_file_path: {metrics_file_path}")
 
         try:
 
             if isinstance(model, type):
+                print(f"Creating model: {model.__name__}")
                 return train_new(
                     model_class = model,
                     train_encodings_file_path = train_encodings_file_path,
@@ -566,6 +589,7 @@ def main(model: Type[AbstractModel] | str,
                 )
 
             elif isinstance(model, str):
+                print(f"Loading model: {model}")
                 return train_continue(
                     model_file_path = model,
                     train_encodings_file_path = train_encodings_file_path,
@@ -597,6 +621,7 @@ if __name__ == "__main__":
 
     __encodings_output_path = os.getenv('ENCODINGS_OUTPUT_DIR_LOCAL')
     __model_save_dir = os.getenv('MODEL_SAVE_DIR_LOCAL')
+    __figures_save_dir = os.getenv('FIGURES_SAVE_DIR_LOCAL')
 
     __train_encodings_file_path = f"{__encodings_output_path}/deeploc_our_train_set.h5"
     __val_encodings_file_path = f"{__encodings_output_path}/deeploc_our_val_set.h5"
@@ -605,8 +630,9 @@ if __name__ == "__main__":
         model = __ModelClass,
         train_encodings_file_path = __train_encodings_file_path,
         val_encodings_file_path = __val_encodings_file_path,
-        model_save_dir = __model_save_dir,  # remove if saving not needed
+        # model_save_dir = __model_save_dir,  # remove if saving not needed
+        figures_save_dir = __figures_save_dir,  # for debugging.
         # for debugging
-        epochs = 2,
+        epochs = 3,
         batch_size = 4
     )

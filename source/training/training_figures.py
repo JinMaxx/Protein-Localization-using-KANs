@@ -27,8 +27,7 @@ from optuna.visualization import plot_optimization_history
 from typing_extensions import Any, Optional, List, Dict, Set, Union, Tuple, cast, override, overload
 
 from source.config import ParamInfo
-from source.metrics.metrics import Metrics, PerformanceMetric
-from source.metrics.metrics_figures import MetricsFiguresCollection
+from source.metrics.metrics import PerformanceMetric
 from source.abstract_figures import _AbstractFigure, AbstractFiguresCollection
 
 
@@ -57,18 +56,18 @@ class HyperParamFiguresCollection(AbstractFiguresCollection):
 
     def hyper_param_performance(self, identifier: Optional[str] = None) -> 'HyperParamPerformance':
         """Creates and adds a figure for plotting hyperparameter performance."""
-        return cast(HyperParamPerformance, self._add(HyperParamPerformance(identifier=identifier, collection=self)))
+        return HyperParamPerformance(identifier=identifier, collection=self)
 
 
     def hyper_param_parameter(self, study: Study, param_name: str, param_info: ParamInfo, identifier: Optional[str] = None) -> 'HyperParamParameter':
         """Creates and adds a figure for plotting hyperparameter optimization history."""
-        return cast(HyperParamParameter, self._add(HyperParamParameter(
+        return HyperParamParameter(
             study = study,
             param_name = param_name,
             param_info = param_info,
             identifier = identifier,
             collection = self
-        )))
+        )
 
 
     @override
@@ -236,13 +235,13 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         Returns:
             EpochDualAxisFigure: The combined dual-axis figure instance.
         """
-        return cast(EpochDualAxisFigure, self._add(EpochDualAxisFigure(
+        return EpochDualAxisFigure(
             model_name = model_name,
             fig_left = figure_left,
             fig_right = figure_right,
             identifier = identifier,
             collection = self
-        )))
+        )
 
     
     def training_performance(self,
@@ -265,14 +264,14 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         Returns:
             TrainingPerformance: The created figure instance.
         """
-        return cast(TrainingPerformance, self._add(TrainingPerformance(
+        return TrainingPerformance(
             model_name = model_name,
             epochs = epochs,
             performance_metrics = performance_metrics,
             performance_data = performance_data,
             identifier = identifier,
             collection = self
-        )))
+        )
 
 
     def training_loss(self,
@@ -295,20 +294,21 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         Returns:
             TrainingLoss: The created figure instance.
         """
-        return cast(TrainingLoss, self._add(TrainingLoss(
+        return TrainingLoss(
             model_name = model_name,
             epochs = epochs,
             train_losses = train_losses,
             val_losses = val_losses,
             identifier = identifier,
             collection = self
-        )))
+        )
 
 
     @override
     def update(self,
             epoch: Optional[int] = None,
             epoch_cut: Optional[int] = None,
+            epoch_mark: Optional[Tuple[int, Optional[str]]] = None,
             performance_values: Optional[Dict[PerformanceMetric, float]] = None,
             train_loss: Optional[float] = None,
             val_loss: Optional[float] = None,
@@ -320,6 +320,8 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         Args:
             epoch (Optional[int]): The current epoch number.
             epoch_cut (Optional[int]): An epoch at which data should be truncated.
+            epoch_mark (Optional[Tuple[int, Optional[str]]]): An epoch that should be marked with a vertical line. 
+                                                              If no color is given, the line will be green by default.
             performance_values (Optional[Dict[PerformanceMetric, float]]): The performance scores for the current epoch.
             train_loss (Optional[float]): The training loss for the current epoch.
             val_loss (Optional[float]): The validation loss for the current epoch.
@@ -327,6 +329,7 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         """
         super().update(
             epoch = epoch,
+            epoch_mark = epoch_mark,
             epoch_cut = epoch_cut,
             performance_values = performance_values,
             train_loss = train_loss,
@@ -523,18 +526,18 @@ class TrainingPerformance(_AbstractEpochFigure):
 
         for metric in self._ordered_metrics:
             self._fig.add_trace(go.Scatter(
-                x=list(range(len(self.__performance_data.get(metric, [])))),
-                y=self.__performance_data.get(metric, []),
-                mode="lines+markers",
-                name=metric.value.replace("_", " ").title(),  # e.g., "f1_score" -> "F1 Score"
-                line=dict(color=METRIC_COLORS.get(metric, "black")) # Default to black
+                x = list(range(len(self.__performance_data.get(metric, [])))),
+                y = self.__performance_data.get(metric, []),
+                mode = "lines+markers",
+                name = metric.value.replace("_", " ").title(),  # e.g., "f1_score" -> "F1 Score"
+                line = dict(color=METRIC_COLORS.get(metric, "black")) # Default to black
             ))
 
         self._fig.update_layout(
-            title=f"Training Performance {self.model_name} (Epoch: 0)",
-            xaxis=dict(title="Epoch"),
-            yaxis=dict(title="Performance Metrics", range=[0.0, 1.0], dtick=0.1),
-            legend_title_text='Metrics'
+            title = f"Training Performance {self.model_name} (Epoch: 0)",
+            xaxis = dict(title="Epoch"),
+            yaxis = dict(title="Metrics", range=[0.0, 1.0], dtick=0.1),
+            # legend_title_text = 'Metrics'
         )
 
 
@@ -550,27 +553,49 @@ class TrainingPerformance(_AbstractEpochFigure):
 
     @overload
     def update(self, epoch_cut: int, **kwargs) -> None: ...
+    
+    
+    @overload
+    def update(self, epoch_mark: Tuple[int, Optional[str]], **kwargs) -> None: ...
 
 
     @override
     def update(self,
         epoch: Optional[int] = None,
         epoch_cut: Optional[int] = None,
+        epoch_mark: Optional[Tuple[int, Optional[str]]] = None,
         performance_values: Optional[Dict[PerformanceMetric, float]] = None,
         **kwargs
     ) -> None:
+        
         if epoch_cut is not None:
             self._fig.add_vline(
-                x=epoch_cut,
-                line=dict(color="red", width=1, dash="dash"),
-                annotation_text=str(epoch_cut),
-                annotation_position="top"
+                x = epoch_cut,
+                line = dict(
+                    color = "red", 
+                    width = 1, 
+                    dash = "dash"
+                ),
+                annotation_text = str(epoch_cut),
+                annotation_position = "top"
             )
             # Truncate performances up to (including) epoch_cut
             for i, metric in enumerate(self._ordered_metrics):
                 self.__performance_data[metric] = self.__performance_data[metric][:epoch_cut + 1]
                 self._fig.data[i].x = list(range(len(self.__performance_data[metric])))
                 self._fig.data[i].y = self.__performance_data[metric]
+        
+        if epoch_mark is not None:
+            self._fig.add_vline(
+                x = epoch_mark[0],
+                line = dict(
+                    color = epoch_mark[1] if epoch_mark[1] is not None else "green", 
+                    width = 1, 
+                    dash = "dash"
+                ),
+                annotation_text = str(epoch_mark[0]),
+                annotation_position = "top"
+            )
 
         elif epoch is not None and performance_values is not None:
             # Update each plotted metric with new data for the given epoch
@@ -654,18 +679,27 @@ class TrainingLoss(_AbstractEpochFigure):
 
     @overload
     def update(self, epoch_cut: int, **kwargs) -> None: ...
+    
+    @overload
+    def update(self, epoch_mark: Tuple[int, Optional[str]], **kwargs) -> None: ...
 
     @override
     def update(self,
             epoch: Optional[int] = None,
             epoch_cut: Optional[int] = None,
+            epoch_mark: Optional[Tuple[int, Optional[str]]] = None,
             train_loss: Optional[float] = None,
             val_loss: Optional[float] = None,
             **kwargs) -> None:
+        
         if epoch_cut is not None:
             self._fig.add_vline(
                 x = epoch_cut,
-                line = dict(color="red", width=1, dash="dash"),
+                line = dict(
+                    color = "red", 
+                    width = 1,
+                    dash = "dash"
+                ),
                 annotation_text = str(epoch_cut),
                 annotation_position = "top"
             )
@@ -679,7 +713,18 @@ class TrainingLoss(_AbstractEpochFigure):
             self._fig.data[0].y = self.__train_losses
             self._fig.data[1].x = list(range(len(self.__val_losses)))
             self._fig.data[1].y = self.__val_losses
-
+            
+        if epoch_mark is not None:
+            self._fig.add_vline(
+                x = epoch_mark[0],
+                line = dict(
+                    color = epoch_mark[1] if epoch_mark[1] is not None else "green", 
+                    width = 1, 
+                    dash = "dash"
+                ),
+                annotation_text = str(epoch_mark[0]),
+                annotation_position = "top"
+            )
 
         elif (epoch is not None and
               train_loss is not None and
@@ -709,49 +754,49 @@ class TrainingLoss(_AbstractEpochFigure):
 # -------------------------------- Training --------------------------------
 
 # Multiple inheritance. Combining metrics figures and epoch figures
-class TrainingFiguresCollection(MetricsFiguresCollection, EpochFiguresCollection):
-    """A unified collection for managing all figures related to model training, including epoch-wise metrics and performance evaluation."""
-
-    def __init__(self, save_dir: Optional[str] = None):
-        super().__init__(save_dir=save_dir)
-
-
-    @override
-    def update(self,
-            model_name: Optional[str] = None,
-            metrics: Optional[Metrics] = None,
-            epoch: Optional[int] = None,
-            epoch_cut: Optional[int] = None,
-            performance_values: Optional[Dict[PerformanceMetric, float]] = None,
-            train_loss: Optional[float] = None,
-            val_loss: Optional[float] = None,
-            identifier: Optional[str] = None,
-            clear: bool = True,
-            **kwargs
-    ) -> None:
-        """
-        Updates all managed figures, dispatching arguments to the appropriate figure types.
-
-        Args:
-            model_name (Optional[str]): The name of the model.
-            metrics (Optional[Metrics]): Metrics object for evaluation plots.
-            epoch (Optional[int]): The current epoch number.
-            epoch_cut (Optional[int]): An epoch for truncating data.
-            performance_values (Optional[Dict[PerformanceMetric, float]]): The performance scores for the current epoch.
-            train_loss (Optional[float]): The current training loss.
-            val_loss (Optional[float]): The current validation loss.
-            identifier (Optional[str]): A unique identifier.
-            clear (bool): If True, clears the output before displaying updates.
-        """
-        AbstractFiguresCollection.update(self,
-            model_name = model_name,
-            metrics = metrics,
-            epoch = epoch,
-            epoch_cut = epoch_cut,
-            performance_values = performance_values,
-            train_loss = train_loss,
-            val_loss = val_loss,
-            identifier = identifier,
-            clear = clear,
-            **kwargs
-        )
+# class TrainingFiguresCollection(MetricsFiguresCollection, EpochFiguresCollection):
+#     """A unified collection for managing all figures related to model training, including epoch-wise metrics and performance evaluation."""
+#
+#     def __init__(self, save_dir: Optional[str] = None):
+#         super().__init__(save_dir=save_dir)
+#
+#
+#     @override
+#     def update(self,
+#             model_name: Optional[str] = None,
+#             metrics: Optional[Metrics] = None,
+#             epoch: Optional[int] = None,
+#             epoch_cut: Optional[int] = None,
+#             performance_values: Optional[Dict[PerformanceMetric, float]] = None,
+#             train_loss: Optional[float] = None,
+#             val_loss: Optional[float] = None,
+#             identifier: Optional[str] = None,
+#             clear: bool = True,
+#             **kwargs
+#     ) -> None:
+#         """
+#         Updates all managed figures, dispatching arguments to the appropriate figure types.
+#
+#         Args:
+#             model_name (Optional[str]): The name of the model.
+#             metrics (Optional[Metrics]): Metrics object for evaluation plots.
+#             epoch (Optional[int]): The current epoch number.
+#             epoch_cut (Optional[int]): An epoch for truncating data.
+#             performance_values (Optional[Dict[PerformanceMetric, float]]): The performance scores for the current epoch.
+#             train_loss (Optional[float]): The current training loss.
+#             val_loss (Optional[float]): The current validation loss.
+#             identifier (Optional[str]): A unique identifier.
+#             clear (bool): If True, clears the output before displaying updates.
+#         """
+#         AbstractFiguresCollection.update(self,
+#             model_name = model_name,
+#             metrics = metrics,
+#             epoch = epoch,
+#             epoch_cut = epoch_cut,
+#             performance_values = performance_values,
+#             train_loss = train_loss,
+#             val_loss = val_loss,
+#             identifier = identifier,
+#             clear = clear,
+#             **kwargs
+#         )

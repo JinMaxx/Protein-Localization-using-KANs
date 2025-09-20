@@ -36,7 +36,7 @@ class ModelFiguresCollection(AbstractFiguresCollection):
         Returns:
             PositionalWeightsFigure: The created figure instance.
         """
-        return cast(PositionalWeightsFigure, self._add(PositionalWeightsFigure(model=model, collection=self)))
+        return PositionalWeightsFigure(model=model, collection=self)
 
 
     @override

@@ -126,7 +126,7 @@ class AbstractModel(nn.Module, ABC):
         raise NotImplementedError
 
 
-    def _get_init_params(self) -> dict[str, Any]:
+    def get_init_params(self) -> dict[str, Any]:
         """
         Introspects the `__init__` method to get its parameters and their current values.
         This is a key part of the robust save/load mechanism.
@@ -156,7 +156,7 @@ class AbstractModel(nn.Module, ABC):
         os.makedirs(save_dir, exist_ok=True)
         file_path = os.path.join(save_dir, f"{identifier if identifier is not None else self.id()}.pth")
         torch.save({
-            'init_params': self._get_init_params(),  # Infer the ffn_layer’s __init__ parameters and their current values
+            'init_params': self.get_init_params(),  # Infer the ffn_layer’s __init__ parameters and their current values
             'state_dict': self.state_dict(),  # Save the ffn_layer weights
             'uuid': self.uuid,
             'class_name': self.__class__.__name__,
@@ -289,10 +289,10 @@ def _create_test_model_class(model_class: Type[AbstractTunableModel], **kwargs) 
 
         @classmethod
         @override
-        def name(cls): return f"{cls.__name__}_{model_class.name()}"
+        def name(cls): return model_class.name()
 
         @override
-        def _get_init_params(self) -> dict[str, Any]:
+        def get_init_params(self) -> dict[str, Any]:
             # Introspect the parent's __init__ to get the correct parameters for saving.
             # Need to overwrite the class in inspect.signature(...)
             params = inspect.signature(model_class.__init__).parameters
@@ -308,7 +308,7 @@ def _create_test_model_class(model_class: Type[AbstractTunableModel], **kwargs) 
             os.makedirs(save_dir, exist_ok=True)
             file_path = os.path.join(save_dir, f"{identifier if identifier is not None else super().id()}.pth")
             torch.save({
-                'init_params': self._get_init_params(),
+                'init_params': self.get_init_params(),
                 'state_dict': self.state_dict(),
                 'uuid': self.uuid,
                 'class_name': model_class.__name__,  # use parents class

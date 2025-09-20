@@ -88,7 +88,6 @@ class AbstractFiguresCollection(ABC):
 
     def __init__(self, save_dir: Optional[str] = None):
         self.__figures: List[_AbstractFigure] = []
-
         self.save_dir: Optional[str] = save_dir
 
 
@@ -167,13 +166,6 @@ class AbstractFiguresCollection(ABC):
         return iter(self.__figures)
 
 
-    def load(self, file_path: str) -> CustomFigureT:
-        """Loads a figure from a pickle file and adds it to the collection."""
-        figure: _AbstractFigure = _AbstractFigure.load(file_path)
-        self._add(figure)
-        return figure
-
-
     # When the parameter figure is initially None, then no figure exists yet until provided by the update_function and nothing will be displayed.
     # If update_function returns a figure, it replaces the existing one.
     def other(self,
@@ -208,7 +200,24 @@ class AbstractFiguresCollection(ABC):
 
     def multifigure(self, figures: List[CustomFigureT], identifier: Optional[str] = None, show_legend: bool = True) -> 'MultiFigure':
         """Combines multiple figures into a single MultiFigure with subplots."""
-        return cast(MultiFigure, self._add(MultiFigure(figures=figures, identifier=identifier, show_legend=show_legend, collection=self)))
+        return MultiFigure(figures=figures, identifier=identifier, show_legend=show_legend, collection=self)
+
+
+
+class ViewFiguresCollection(AbstractFiguresCollection):
+    """A concrete class to hold and display loaded figures."""
+
+    def __init__(self):
+        super().__init__(save_dir=None)
+
+
+    def update(self, **kwargs):
+        super().update(**kwargs)
+
+
+    def load(self, file_path: str) -> CustomFigureT:
+        """Loads a figure from a pickle file and adds it to the collection."""
+        return FigureViewer.load(file_path, self)
 
 
 
@@ -226,6 +235,8 @@ class _AbstractFigure(ABC):
         if self._fig is not None: set_centralized_theme(self._fig)
         self._identifier: str = identifier if identifier is not None else str(uuid.uuid4())  # used for unique file_paths
         self.__collection: AbstractFiguresCollection = collection
+        # noinspection PyProtectedMember
+        self.__collection._add(self)
 
 
     @abstractmethod
@@ -266,14 +277,6 @@ class _AbstractFigure(ABC):
         else: return None
 
 
-    @staticmethod
-    def load(file_path: str) -> '_AbstractFigure':
-        """Loads a figure from a pickle file."""
-        with open(file_path, "rb") as object_file_handle: figure = pickle.load(object_file_handle)
-        if not isinstance(figure, _AbstractFigure): raise TypeError("Loaded object is not an _AbstractFigure")
-        return figure
-
-
     def remove(self):
         """Removes this figure from its parent collection."""
         self.__collection.delete(self)
@@ -290,6 +293,46 @@ class _AbstractFigure(ABC):
 
     def __repr__(self) -> str:
         return self.__str__()
+
+
+
+class FigureViewer(_AbstractFigure):
+    """
+    A simple, concrete wrapper for a loaded Plotly figure.
+    Its update method is a no-op, as it's designed for static viewing.
+    """
+
+    def __init__(self, collection: AbstractFiguresCollection, figure: Figure, name: str):
+        super().__init__(collection=collection, figure=figure)
+        self.__name = name
+
+
+    @staticmethod
+    def load(file_path: str, collection: AbstractFiguresCollection) -> 'FigureViewer':
+        """
+        Loads a plotly figure from a pickle file, wraps it in a FigureViewer instance, and adds it to this collection.
+        """
+        try:
+            with open(file_path, "rb") as object_file_handle: figure = pickle.load(object_file_handle)
+            if not isinstance(figure, Figure): raise TypeError(f"Loaded object from {file_path} is not a Plotly Figure.")
+            return FigureViewer(
+                collection = collection,
+                figure = figure,
+                name = os.path.splitext(os.path.basename(file_path))[0]
+            )
+        except Exception as error:
+            print(f"Error loading and wrapping figure from {file_path}: {error}")
+            raise error
+
+
+    @override
+    def update(self, **kwargs):
+        pass # This viewer is for static, loaded figures, so updates are ignored.
+
+
+    @override
+    def name(self) -> str:
+        return self.__name
 
 
 

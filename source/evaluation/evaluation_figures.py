@@ -48,13 +48,13 @@ class EvaluationFiguresCollection(AbstractFiguresCollection):
         Returns:
             AccuracyComparisonFigure: The created figure instance.
         """
-        return cast(AccuracyComparisonFigure, self._add(AccuracyComparisonFigure(
+        return AccuracyComparisonFigure(
             identifier = identifier,
             model_names = model_names,
             accuracies = accuracies,
             errors = errors,
             collection = self
-        )))
+        )
 
 
     @override
@@ -177,13 +177,39 @@ class AccuracyComparisonFigure(_AbstractEvaluationFigure):
         self._colors.append('orange')
 
         if metrics_sampled is not None:
-            accuracy_mean, confidence_interval = metrics_sampled.accuracies_mean_and_confidence_interval()
-            accuracy_mean: float
-            confidence_interval: Tuple[float, float]
+            confidence_interval: Tuple[float, float] = metrics_sampled.accuracies_confidence_interval()
             error = abs(confidence_interval[1] - confidence_interval[0]) / 2  # symmetric error
             self._errors.append(error)  # (np.sqrt(accuracy * (1 - accuracy) / total) if total > 0 else 0.0) # standard error (multiply by 1.96 for 95% confidence interval)
         else:
             self._errors.append(float('nan'))  # hiding error bars
+
+        # # keeping preset data in original order
+        # pre_init_names = self._model_names[:self._num_pre_init]
+        # pre_init_accuracies = self._accuracies[:self._num_pre_init]
+        # pre_init_errors = self._errors[:self._num_pre_init]
+        # pre_init_colors = self._colors[:self._num_pre_init]
+        #
+        # # separating new data from preset data
+        # new_names = self._model_names[self._num_pre_init:]
+        # new_accuracies = self._accuracies[self._num_pre_init:]
+        # new_errors = self._errors[self._num_pre_init:]
+        # new_colors = self._colors[self._num_pre_init:]
+        #
+        # # sort new data by accuracy
+        # if new_names:
+        #     zipped_new_data = sorted(
+        #         zip(new_accuracies, new_names, new_errors, new_colors),
+        #         key=lambda item: item[0]  # Sort by accuracy (first element)
+        #     )
+        #     sorted_new_accuracies, sorted_new_names, sorted_new_errors, sorted_new_colors = zip(*zipped_new_data)
+        # else: # no new models
+        #     sorted_new_accuracies, sorted_new_names, sorted_new_errors, sorted_new_colors = [], [], [], []
+        #
+        # # combine data
+        # final_names = pre_init_names + list(sorted_new_names)
+        # final_accuracies = pre_init_accuracies + list(sorted_new_accuracies)
+        # final_errors = pre_init_errors + list(sorted_new_errors)
+        # final_colors = pre_init_colors + list(sorted_new_colors)
 
         bar = go.Bar(
             x = self._model_names,
@@ -195,8 +221,11 @@ class AccuracyComparisonFigure(_AbstractEvaluationFigure):
                 color = 'black',
                 thickness = 1.5
             ),
-            text = [f"{val * 100:.0f}%" for val in self._accuracies],  # Display value over bar
+            text = [
+                f"{acc * 100:.0f}%" if color == 'grey' else f"{acc * 100:.1f}%"
+                for acc, color in zip(self._accuracies, self._colors)
+            ],  # Display value over bar (lower precision for preset data)
             textposition = "auto",
-            marker = dict(color=self._colors)
+            marker = dict(color = self._colors)
         )
         self._fig.add_trace(bar)

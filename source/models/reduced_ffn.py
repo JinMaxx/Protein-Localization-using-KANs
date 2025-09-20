@@ -21,9 +21,7 @@ from source.models.ffn import AbstractFFN, FastKAN, MLP
 from source.models.abstract import AbstractSequenceModel
 from source.training.utils.hidden_layers import HiddenLayers
 from source.training.utils.collate_functions import per_residue_collate_function  # , per_protein_collate_function
-from source.config import ConfigType, AbstractReducedFFNConfig, ReducedFastKANConfig, \
-    ReducedWChannelsFastKANConfig
-
+from source.config import ConfigType, AbstractReducedFFNConfig, ReducedFastKANConfig
 from source.models.reduction_layers import (
     AbstractReductionLayer,
     PositionalWeightedConvLayer,
@@ -64,9 +62,10 @@ class AbstractReducedFFN(AbstractSequenceModel, ABC):
             in_seq_len: int,
             reduced_seq_len: int,
             hidden_layers: HiddenLayers,
-            reduction_layer_class: Type[AbstractReductionLayer],
             ffn_layer_class: Type[AbstractFFN],
+            reduction_layer_class: Type[AbstractReductionLayer],
             ffn_layer_kwargs: Optional[Dict] = None,
+            reduction_layer_kwargs: Optional[Dict] = None,
             out_channels: Optional[int] = None,
             reduced_channels: Optional[int] = None):
         super().__init__(
@@ -78,9 +77,10 @@ class AbstractReducedFFN(AbstractSequenceModel, ABC):
         self.reduced_seq_len: int = reduced_seq_len
         self.reduced_channels: int = reduced_channels if reduced_channels is not None else self.in_channels
         self.hidden_layers: HiddenLayers = hidden_layers
-        self.reduction_layer_class: Type[AbstractReductionLayer] = reduction_layer_class
         self.ffn_model_class: Type[AbstractFFN] = ffn_layer_class
         self.ffn_layer_kwargs: Dict = ffn_layer_kwargs if ffn_layer_kwargs is not None else {}
+        self.reduction_layer_class: Type[AbstractReductionLayer] = reduction_layer_class
+        self.reduction_layer_kwargs: Dict = reduction_layer_kwargs if reduction_layer_kwargs is not None else {}
 
         self.reduction_layer: AbstractReductionLayer = \
             reduction_layer_class(
@@ -88,7 +88,8 @@ class AbstractReducedFFN(AbstractSequenceModel, ABC):
                 in_seq_len = self.in_seq_len,
                 out_seq_len = self.reduced_seq_len,
                 out_channels = self.reduced_channels,
-                device = self.device
+                device = self.device,
+                **self.reduction_layer_kwargs
             )
 
         # More dynamically setting parameters with the reduction layer deciding them.
@@ -140,13 +141,16 @@ class AbstractReducedFastKAN(AbstractReducedFFN, ABC):
             reduced_seq_len: int,
             hidden_layers: HiddenLayers,
             reduction_layer_class: Type[AbstractReductionLayer],
+            reduction_layer_kwargs: Optional[Dict] = None,
             out_channels: Optional[int] = None,
             reduced_channels: Optional[int] = None,
             grid_diff: Optional[int] = None,
             num_grids: Optional[int] = None):
 
-        self.grid_diff = grid_diff
-        self.num_grids = num_grids
+        config = self.get_config()
+
+        self.grid_diff = grid_diff if grid_diff is not None else config.grid_diff
+        self.num_grids = num_grids if num_grids is not None else config.num_grids
 
         super().__init__(
             in_channels = in_channels,
@@ -156,6 +160,7 @@ class AbstractReducedFastKAN(AbstractReducedFFN, ABC):
             reduced_channels = reduced_channels,
             hidden_layers = hidden_layers,
             reduction_layer_class = reduction_layer_class,
+            reduction_layer_kwargs = reduction_layer_kwargs,
             ffn_layer_class = FastKAN,
             ffn_layer_kwargs = dict(
                 grid_diff = self.grid_diff,
@@ -188,10 +193,10 @@ class MaxPoolFastKAN(AbstractReducedFastKAN):
         
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = MaxPoolConvLayer,
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
@@ -219,10 +224,10 @@ class MaxPoolMLP(AbstractReducedFFN):
 
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = MaxPoolConvLayer,
             ffn_layer_class = MLP,
@@ -251,10 +256,10 @@ class AvgPoolFastKAN(AbstractReducedFastKAN):
 
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = AvgPoolConvLayer,
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
@@ -282,14 +287,14 @@ class AvgPoolMLP(AbstractReducedFFN):
         config = self.get_config()
 
         super().__init__(
-            in_channels=in_channels,
-            in_seq_len=in_seq_len if in_seq_len is not None else config.in_seq_len,
-            out_channels=out_channels,
-            reduced_seq_len=reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
-            reduced_channels=in_channels,  # in_channels == out_channels
-            hidden_layers=hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class=AvgPoolConvLayer,
-            ffn_layer_class=MLP,
+            in_channels = in_channels,
+            out_channels = out_channels,
+            reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            reduction_layer_class = AvgPoolConvLayer,
+            ffn_layer_class = MLP,
         )
 
 
@@ -316,10 +321,10 @@ class LinearFastKAN(AbstractReducedFastKAN):
         
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = LinearReductionLayer,
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
@@ -347,14 +352,14 @@ class LinearMLP(AbstractReducedFFN):
         config = self.get_config()
 
         super().__init__(
-            in_channels=in_channels,
-            in_seq_len=in_seq_len if in_seq_len is not None else config.in_seq_len,
-            out_channels=out_channels,
-            reduced_seq_len=reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
-            reduced_channels=in_channels,  # in_channels == out_channels
-            hidden_layers=hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class=LinearReductionLayer,
-            ffn_layer_class=MLP,
+            in_channels = in_channels,
+            out_channels = out_channels,
+            reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            reduction_layer_class = LinearReductionLayer,
+            ffn_layer_class = MLP,
         )
 
 
@@ -374,22 +379,29 @@ class AttentionFastKAN(AbstractReducedFastKAN):
             out_channels: Optional[int] = None,
             reduced_seq_len: int = None,
             hidden_layers: HiddenLayers = None,
+            num_heads: int = None,
             grid_diff: int = None,
             num_grids: int = None):
 
-        config = self.get_config()
-        
+        from source.config import AttentionFastKANConfig
+        config: AttentionFastKANConfig = cast(AttentionFastKANConfig, self.get_config())
+
+        self.num_heads: int = num_heads if num_heads is not None else config.num_heads
+
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = AttentionLayer,
+            reduction_layer_kwargs = dict(
+                num_heads = self.num_heads
+            ),
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
             num_grids = num_grids if num_grids is not None else config.num_grids
-        )
+            )
 
 
     @classmethod
@@ -407,18 +419,25 @@ class AttentionMLP(AbstractReducedFFN):
             in_seq_len: int = None,
             out_channels: Optional[int] = None,
             reduced_seq_len: int = None,
-            hidden_layers: HiddenLayers = None):
+            hidden_layers: HiddenLayers = None,
+            num_heads: int = None):
 
-        config = self.get_config()
-        
+        from source.config import AttentionMLPConfig
+        config: AttentionMLPConfig = cast(AttentionMLPConfig, self.get_config())
+
+        self.num_heads: int = num_heads if num_heads is not None else config.num_heads
+
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
-            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = in_channels,  # in_channels == out_channels
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = AttentionLayer,
+            reduction_layer_kwargs = dict(
+                num_heads = self.num_heads
+            ),
             ffn_layer_class = MLP,
         )
 
@@ -440,10 +459,16 @@ class PositionalFastKAN(AbstractReducedFastKAN):  # Adding functionality to Fast
             reduced_seq_len: int = None,
             reduced_channels: int = None,
             hidden_layers: HiddenLayers = None,
+            kernel_size: int = None,
+            weights_scalar: float = None,
             grid_diff: int = None,
             num_grids: int = None):
 
-        config: ReducedWChannelsFastKANConfig = cast(ReducedWChannelsFastKANConfig, self.get_config())
+        from source.config import PositionalFastKANConfig
+        config: PositionalFastKANConfig = cast(PositionalFastKANConfig, self.get_config())
+
+        self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
+        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.kernel_size
 
         super().__init__(
             in_channels = in_channels,
@@ -453,6 +478,10 @@ class PositionalFastKAN(AbstractReducedFastKAN):  # Adding functionality to Fast
             reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = PositionalWeightedConvLayer,
+            reduction_layer_kwargs = dict(
+                kernel_size = self.kernel_size,
+                weights_scalar = self.weights_scalar
+            ),
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
             num_grids = num_grids if num_grids is not None else config.num_grids
         )
@@ -480,20 +509,31 @@ class PositionalMLP(AbstractReducedFFN):
             out_channels: Optional[int] = None,
             reduced_seq_len: int = None,
             reduced_channels: int = None,
-            hidden_layers: HiddenLayers = None):
+            hidden_layers: HiddenLayers = None,
+            kernel_size: int = None,
+            weights_scalar: float = None):
 
-        config: ReducedWChannelsFastKANConfig = cast(ReducedWChannelsFastKANConfig, self.get_config())
+        from source.config import PositionalMLPConfig
+        config: PositionalMLPConfig = cast(PositionalMLPConfig, self.get_config())
+
+        self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
+        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.kernel_size
 
         super().__init__(
-            in_channels=in_channels,
-            in_seq_len=in_seq_len if in_seq_len is not None else config.in_seq_len,
-            out_channels=out_channels,
-            reduced_seq_len=reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
-            reduced_channels=reduced_channels if reduced_channels is not None else config.reduced_channels,
-            hidden_layers=hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class=PositionalWeightedConvLayer,
-            ffn_layer_class=MLP,
+            in_channels = in_channels,
+            out_channels = out_channels,
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
+            reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            reduction_layer_class = PositionalWeightedConvLayer,
+            reduction_layer_kwargs = dict(
+                kernel_size = self.kernel_size,
+                weights_scalar = self.weights_scalar
+            ),
+            ffn_layer_class = MLP,
         )
+
 
 
     @classmethod
@@ -513,19 +553,26 @@ class UNetFastKAN(AbstractReducedFastKAN):
             reduced_seq_len: int = None,
             reduced_channels: int = None,
             hidden_layers: HiddenLayers = None,
+            kernel_size: int = None,
             grid_diff: int = None,
             num_grids: int = None):
 
-        config: ReducedWChannelsFastKANConfig = cast(ReducedWChannelsFastKANConfig, self.get_config())
-        
+        from source.config import UNetFastKANConfig
+        config: UNetFastKANConfig = cast(UNetFastKANConfig, self.get_config())
+
+        self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
+
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             out_channels = out_channels,
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             reduction_layer_class = UNetReductionLayer,
+            reduction_layer_kwargs = dict(
+                kernel_size = self.kernel_size
+            ),
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
             num_grids = num_grids if num_grids is not None else config.num_grids
         )
@@ -547,19 +594,26 @@ class UNetMLP(AbstractReducedFFN):
             out_channels: Optional[int] = None,
             reduced_seq_len: int = None,
             reduced_channels: int = None,
-            hidden_layers: HiddenLayers = None):
+            hidden_layers: HiddenLayers = None,
+            kernel_size: int = None):
 
-        config: ReducedWChannelsFastKANConfig = cast(ReducedWChannelsFastKANConfig, self.get_config())
-
+        from source.config import UNetMLPConfig
+        config: UNetMLPConfig = cast(UNetMLPConfig, self.get_config())
+        
+        self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
+        
         super().__init__(
-            in_channels=in_channels,
-            in_seq_len=in_seq_len if in_seq_len is not None else config.in_seq_len,
-            out_channels=out_channels,
-            reduced_seq_len=reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
-            reduced_channels=reduced_channels if reduced_channels is not None else config.reduced_channels,
-            hidden_layers=hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class=UNetReductionLayer,
-            ffn_layer_class=MLP,
+            in_channels = in_channels,
+            out_channels = out_channels,
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
+            reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            reduction_layer_class = UNetReductionLayer,
+            reduction_layer_kwargs = dict(
+                kernel_size = self.kernel_size
+            ),
+            ffn_layer_class = MLP,
         )
 
 

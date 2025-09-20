@@ -45,34 +45,34 @@ class MetricsFiguresCollection(AbstractFiguresCollection):
 
     def metrics_heatmap(self, identifier: Optional[str] = None) -> 'MetricsHeatmap':
         """Creates and adds a confusion matrix heatmap figure."""
-        return cast(MetricsHeatmap, self._add(MetricsHeatmap(identifier=identifier, collection=self)))
+        return MetricsHeatmap(identifier=identifier, collection=self)
 
 
     def probability_calibration_curve(self, identifier: Optional[str] = None) -> 'ProbabilityCalibrationCurve':
         """Creates and adds a probability calibration curve figure."""
-        return cast(ProbabilityCalibrationCurve, self._add(ProbabilityCalibrationCurve(identifier=identifier, collection=self)))
+        return ProbabilityCalibrationCurve(identifier=identifier, collection=self)
 
 
     def prediction_confidence_violin(self, identifier: Optional[str] = None) -> 'PredictionConfidenceViolin':
         """Creates and adds a prediction confidence violin plot."""
-        return cast(PredictionConfidenceViolin, self._add(PredictionConfidenceViolin(identifier=identifier, collection=self)))
+        return PredictionConfidenceViolin(identifier=identifier, collection=self)
 
 
     def roc_curve(self, identifier: Optional[str] = None) -> 'ROCCurve':
         """Creates and adds a Receiver Operating Characteristic (ROC) curve figure."""
-        return cast(ROCCurve, self._add(ROCCurve(identifier=identifier, collection=self)))
+        return ROCCurve(identifier=identifier, collection=self)
 
 
     def pr_curve(self, identifier: Optional[str] = None) -> 'PRCurve':
         """Creates and adds a Precision-Recall (PR) curve figure."""
-        return cast(PRCurve, self._add(PRCurve(identifier=identifier, collection=self)))
+        return PRCurve(identifier=identifier, collection=self)
 
 
     def duo_curves(self, identifier: Optional[str] = None) -> MultiFigure:
         """Creates and adds a combined figure containing both ROC and PR curves."""
         roc_curve_figure = ROCCurve(collection=self)
         pr_curve_figure = PRCurve(collection=self)
-        return cast(MultiFigure, self._add(MultiFigure(figures=[roc_curve_figure, pr_curve_figure], identifier=identifier, collection=self)))
+        return MultiFigure(figures=[roc_curve_figure, pr_curve_figure], identifier=identifier, collection=self)
 
 
     @override
@@ -304,11 +304,14 @@ class _AbstractCurve(_AbstractMetricsFigure, ABC):
         self._fig.update_layout(
             xaxis = dict(
                 range = [0, 1],
-                dtick = 0.2
+                dtick = 0.2,
+                constrain = 'domain'
             ),
             yaxis = dict(
                 range = [0, 1],
-                dtick = 0.2
+                dtick = 0.2,
+                scaleanchor = 'x',
+                scaleratio = 1
             )
         )
 
@@ -326,18 +329,18 @@ class _AbstractCurve(_AbstractMetricsFigure, ABC):
         self._fig.data = []
 
         for label in metrics.labels():
-            false_positive_rate, true_positive_rate, _ = self._curve_metrics_function(metrics, label)
+            x_coords, y_coords, _ = self._curve_metrics_function(metrics, label)
             self._fig.add_trace(
                 go.Scatter(
-                    x = false_positive_rate,
-                    y = true_positive_rate,
+                    x = x_coords,
+                    y = y_coords,
                     mode = "lines",
                     name = label.name,
                     legendgroup = label.name,  # Group all traces for this label
-                    line = dict(
-                        color = get_label_color(label),
-                        shape = "hv" # "linear"
-                    ),
+                    # line = dict(
+                    #     color = get_label_color(label),
+                    #     shape = "hv" # "linear"
+                    # ),
                 )
             )
 
@@ -361,8 +364,8 @@ class ROCCurve(_AbstractCurve):
         super().__init__(identifier=identifier, collection=collection)
 
         self._fig.update_layout(
-            xaxis_title = "Recall",
-            yaxis_title = "Precision"
+            xaxis_title = "False Positive Rate (FPR)",
+            yaxis_title = "True Positive Rate (TPR)"
         )
 
         # Diagonal reference line (random baseline)
@@ -399,8 +402,19 @@ class PRCurve(_AbstractCurve):
         super().__init__(identifier=identifier, collection=collection)
 
         self._fig.update_layout(
-            xaxis_title = "False Positive Rate (FPR)",
-            yaxis_title = "True Positive Rate (TPR)"
+            xaxis_title = "Recall",
+            yaxis_title = "Precision"
+        )
+
+        self._fig.add_trace(
+            go.Scatter(
+                x = [0, 1],
+                y = [1, 0],
+                mode = "lines",
+                name = "Baseline",
+                line = dict(color="black", dash="dash"),
+                showlegend = True
+            )
         )
 
 

@@ -38,7 +38,8 @@ class AbstractReductionLayer(nn.Module, ABC):
             in_seq_len: int,
             out_seq_len: int,
             device: torch_device,
-            out_channels: Optional[int] = None):
+            out_channels: Optional[int] = None,
+            **_):
         super().__init__()
 
         self.in_channels: int = in_channels
@@ -198,6 +199,7 @@ class AttentionLayer(AbstractReductionLayer):
             in_seq_len: int,
             out_seq_len: int,
             device: torch_device,
+            num_heads: int = 8,
             **_):
         super().__init__(
             in_channels = in_channels,
@@ -206,12 +208,16 @@ class AttentionLayer(AbstractReductionLayer):
             out_channels = in_channels,   # in_channels = out_channels
             device = device
         )
+        if self.in_channels % num_heads != 0:
+            raise ValueError(f"in_channels ({self.in_channels}) must be divisible by num_heads ({num_heads}).")
         self.attention = torch.nn.MultiheadAttention(
             embed_dim = self.in_channels,
-            num_heads = 4,  # Can tune this
+            num_heads = num_heads,  # Can tune this
             batch_first = True,
             device = device
         )
+        self.layer_norm = nn.LayerNorm(self.in_channels, device=device)
+
         # Learnable output queries that will attend to the sequence
         self.output_queries = torch.nn.Parameter(torch.randn(self.out_seq_len, self.in_channels, device=self.device))
 
@@ -219,15 +225,22 @@ class AttentionLayer(AbstractReductionLayer):
     @override
     def forward(self, x: Encodings_Batch_PerResidue_T, attention_mask: AttentionMask_Batch_T):
         # x: [batch_size, seq_len, in_channels]
-        batch_size = x.size(0)
-        # Expand output_queries for the batch
-        queries = self.output_queries.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, out_seq_len, in_channels]
 
         # MultiheadAttention expects `key_padding_mask` where True indicates a value to be ignored.
         # We assume the input `attention_mask` has True for valid tokens, so we invert it.
         key_padding_mask = ~attention_mask if attention_mask is not None else None
 
-        # Attention: queries, keys, values
+        # Self-Attention for creating a context-aware sequence.
+        self_attn_output, _ = self.attention(
+            query=x, key=x, value=x, key_padding_mask=key_padding_mask
+        )
+        x = self.layer_norm(x + self_attn_output)
+
+        batch_size = x.size(0)
+        # Expand output_queries for the batch
+        queries = self.output_queries.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, out_seq_len, in_channels]
+
+        # Attention summarizing the richer sequence.
         attended, _ = self.attention(
             query = queries,  # [batch, out_seq_len, in_channels]
             key = x,          # [batch, seq_len, in_channels]
@@ -254,7 +267,10 @@ class PositionalWeightedConvLayer(AbstractReductionLayer):
             in_seq_len: int,
             out_seq_len: int,
             device: torch_device,
-            out_channels: Optional[int] = None):
+            kernel_size: int,
+            weights_scalar: float,
+            out_channels: Optional[int] = None,
+            **_):
         super().__init__(
             in_channels = in_channels,
             in_seq_len = in_seq_len,
@@ -266,8 +282,8 @@ class PositionalWeightedConvLayer(AbstractReductionLayer):
         self.conv1d = nn.Conv1d(
             in_channels = self.in_channels,
             out_channels = self.out_channels,
-            kernel_size = 3,
-            padding = 1
+            kernel_size = kernel_size,
+            padding = (kernel_size - 1) // 2
         ).to(self.device)
 
         # Learnable positional weights
@@ -275,11 +291,12 @@ class PositionalWeightedConvLayer(AbstractReductionLayer):
         nn.init.xavier_uniform_(pos_weights, gain=2.0)  # Small values might hinder my learning rate -> up the gain
         self.positional_weights = nn.Parameter(pos_weights).to(self.device)
         self.positional_weights.register_hook(lambda grad: grad * 2)  # works fine in range [2;10]
+        # maybe too aggressive?
 
         c = 4.0  # For sigmoid. Clamp the weights to keep them in range. Avoiding growing out of saturated regime.
         self.positional_weights.data.clamp_(-c, c)
 
-        self.weights_scalar = torch.tensor(2.0).to(self.device)  # 2.0 works quite well.
+        self.weights_scalar = torch.tensor(weights_scalar).to(self.device)  # 2.0 works quite well.
 
 
     @override
@@ -329,7 +346,9 @@ class UNetReductionLayer(AbstractReductionLayer):
             in_seq_len: int,
             out_seq_len: int,
             device: torch_device,
-            out_channels: Optional[int] = None):
+            kernel_size: int,
+            out_channels: Optional[int] = None,
+            **_):
         super().__init__(
             in_channels = in_channels,
             in_seq_len = in_seq_len,
@@ -337,18 +356,20 @@ class UNetReductionLayer(AbstractReductionLayer):
             out_channels = out_channels,
             device = device
         )
+
+        padding = (kernel_size - 1) // 2
         
         # Encoder: 1D convolutions with pooling
-        self.enc_conv1 = torch.nn.Conv1d(self.in_channels, self.in_channels, kernel_size=3, padding=1, device=self.device)
+        self.enc_conv1 = torch.nn.Conv1d(self.in_channels, self.in_channels, kernel_size=kernel_size, padding=padding, device=self.device)
         self.enc_pool1 = torch.nn.MaxPool1d(kernel_size=2)
-        self.enc_conv2 = torch.nn.Conv1d(self.in_channels, self.in_channels, kernel_size=3, padding=1, device=self.device)
+        self.enc_conv2 = torch.nn.Conv1d(self.in_channels, self.in_channels, kernel_size=kernel_size, padding=padding, device=self.device)
         self.enc_pool2 = torch.nn.MaxPool1d(kernel_size=2)
 
         # Decoder: Transposed convolutions (upsampling)
         self.dec_conv_trans1 = torch.nn.ConvTranspose1d(self.in_channels, self.in_channels, kernel_size=2, stride=2, device=self.device)
-        self.dec_conv1 = torch.nn.Conv1d(2 * self.in_channels, self.in_channels, kernel_size=3, padding=1, device=self.device)
+        self.dec_conv1 = torch.nn.Conv1d(2 * self.in_channels, self.in_channels, kernel_size=kernel_size, padding=padding, device=self.device)
         self.dec_conv_trans2 = torch.nn.ConvTranspose1d(self.in_channels, self.in_channels, kernel_size=2, stride=2, device=self.device)
-        self.dec_conv2 = torch.nn.Conv1d(2 * self.in_channels, self.out_channels, kernel_size=3, padding=1, device=self.device)
+        self.dec_conv2 = torch.nn.Conv1d(2 * self.in_channels, self.out_channels, kernel_size=kernel_size, padding=padding, device=self.device)
 
         # Final projection to the desired output sequence length
         self.final_pool = torch.nn.AdaptiveMaxPool1d(self.out_seq_len)

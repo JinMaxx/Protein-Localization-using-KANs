@@ -85,25 +85,37 @@ class MetricsSampled:
         sem = MetricsSampled.__standard_error_of_mean(numbers)
         return mean - sem * float(ci / 100) / 2, mean + sem * float(ci / 100) / 2
 
+    def accuracies_mean(self) -> float:
+        """Returns the mean of the accuracies."""
+        return self.__mean(self.accuracies)
 
-    def accuracies_mean_and_confidence_interval(self) -> Tuple[float, Tuple[float, float]]:
-        """Returns the mean and 95% confidence interval for the accuracies."""
-        return self.__mean(self.accuracies), self.__confidence_interval(self.accuracies)
+    def accuracies_confidence_interval(self) -> Tuple[float, float]:
+        """Returns the 95% confidence interval for the accuracies."""
+        return self.__confidence_interval(self.accuracies)
 
+    def sensitivities_mean(self) -> float:
+        """Returns the mean of the sensitivities."""
+        return self.__mean(self.sensitivities)
 
-    def sensitivities_mean_and_confidence_interval(self) -> Tuple[float, Tuple[float, float]]:
-        """Returns the mean and 95% confidence interval for the sensitivities."""
-        return self.__mean(self.sensitivities), self.__confidence_interval(self.sensitivities)
+    def sensitivities_confidence_interval(self) -> Tuple[float, float]:
+        """Returns the 95% confidence interval for the sensitivities."""
+        return self.__confidence_interval(self.sensitivities)
 
+    def specificities_mean(self) -> float:
+        """Returns the mean of the specificities."""
+        return self.__mean(self.specificities)
 
-    def specificities_mean_and_confidence_interval(self) -> Tuple[float, Tuple[float, float]]:
-        """Returns the mean and 95% confidence interval for the specificities."""
-        return self.__mean(self.specificities), self.__confidence_interval(self.specificities)
+    def specificities_confidence_interval(self) -> Tuple[float, float]:
+        """Returns the 95% confidence interval for the specificities."""
+        return self.__confidence_interval(self.specificities)
 
+    def f1_scores_mean(self) -> float:
+        """Returns the mean of the F1-scores."""
+        return self.__mean(self.f1_scores)
 
-    def f1_scores_mean_and_confidence_interval(self) -> Tuple[float, Tuple[float, float]]:
-        """Returns the mean and 95% confidence interval for the F1-scores."""
-        return self.__mean(self.f1_scores), self.__confidence_interval(self.f1_scores)
+    def f1_scores_confidence_interval(self) -> Tuple[float, float]:
+        """Returns the 95% confidence interval for the F1-scores."""
+        return self.__confidence_interval(self.f1_scores)
 
 
     @staticmethod

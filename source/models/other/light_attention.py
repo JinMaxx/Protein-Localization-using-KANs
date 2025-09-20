@@ -1,34 +1,30 @@
 """
-This module provides an implementation of the Light Attention model, 
-a neural architecture designed for protein localization prediction, as introduced in the paper: 
+This module provides an abstract base class for the Light Attention model,
+a neural architecture designed for protein localization prediction based on the paper:
 "Light attention predicts protein location from the language of life" by Hannes Stark et al.
 
 The implementation is based on the official code release:
 https://github.com/HannesStark/protein-localization/blob/master/models/light_attention.py
 
-The core idea of Light Attention is to use two parallel 1D convolutions on the input sequence embeddings. 
-One convolution learns attention coefficients, which are then used 
-to compute a weighted sum over the output of the second convolution (the "values"). 
-This creates an efficient, attention-like mechanism without the quadratic complexity of standard self-attention.
-
-This file includes:
-- `LightAttentionFFN`: A custom FFN mirroring the classifier design from the original paper.
-- `LightAttention`: The main model implementation.
-- `LightAttentionFastKAN`: A variant that replaces the original FFN with a FastKAN model for comparative analysis.
+The module includes:
+- AbstractLightAttention: An ABC that defines the core Light Attention mechanism.
+- LightAttentionFFN: A specific FFN designed to replicate the classifier from the original paper.
+- LightAttentionLAMLP: A concrete implementation that combines AbstractLightAttention with the original LightAttentionFFN.
+- LightAttentionFastKAN: A concrete implementation that combines AbstractLightAttention with FastKAN.
 """
 
-from typing import Tuple
 
 import torch
 import torch.nn as nn
 
-from typing_extensions import override, cast, Type, Optional, List
+from abc import ABC
+from typing_extensions import override, cast, Type, Optional, List, Tuple
 
 from source.models.ffn import AbstractFFN, FastKAN
 from source.models.abstract import AbstractSequenceModel
 from source.training.utils.hidden_layers import HiddenLayers
 from source.training.utils.collate_functions import per_residue_collate_function
-from source.config import ConfigType, LightAttentionConfig, LightAttentionFastKANConfig
+from source.config import ConfigType
 
 from source.custom_types import (
     Encodings_Batch_T,
@@ -41,41 +37,42 @@ class LightAttentionFFN(AbstractFFN):
     """
     A specific Feed-Forward Network designed to match the classifier in the original LightAttention implementation.
 
-    This FFN consists of blocks of `Linear -> Dropout -> ReLU -> BatchNorm1d` for each hidden layer, 
+    This FFN consists of blocks of `Linear -> Dropout -> ReLU -> BatchNorm1d` for each hidden layer,
     followed by a final linear layer for the output.
     This structure is explicitly defined to replicate the architecture described in the source paper.
     """
 
     def __init__(self,
-            in_channels: int,
-            hidden_layers,
-            ffn_dropout_rate: float = None,
-            out_channels: Optional[int] = None,
-            **_):
+                 in_channels: int,
+                 hidden_layers: HiddenLayers = None,
+                 dropout_rate: float = None,
+                 out_channels: Optional[int] = None,
+                 **_):
         """
         Initializes the LightAttentionFFN.
 
         Args:
             in_channels: The number of input features.
             hidden_layers: Configuration for the hidden layers.
-            ffn_dropout_rate: Dropout rate to be used within the FFN blocks.
+            dropout_rate: Dropout rate to be used within the FFN blocks.
             out_channels: The number of output classes.
         """
-        config: LightAttentionConfig = cast(LightAttentionConfig, self.get_config())
-        self.ffn_dropout_rate: float = ffn_dropout_rate if ffn_dropout_rate is not None else config.ffn_dropout_rate
+        from source.config import LightAttentionFFNConfig
+        config: LightAttentionFFNConfig = cast(LightAttentionFFNConfig, self.get_config())
+        self.dropout_rate: float = dropout_rate if dropout_rate is not None else config.dropout_rate
 
         # FFN takes a single flat vector as an input.
         super().__init__(
             in_channels = in_channels,
             in_seq_len = 1,
-            hidden_layers = hidden_layers,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             out_channels = out_channels
         )
 
     
     @classmethod
     @override
-    def config_type(cls) -> ConfigType: return ConfigType.LightAttention
+    def config_type(cls) -> ConfigType: return ConfigType.LightAttentionFFN
 
 
     @override
@@ -105,7 +102,7 @@ class LightAttentionFFN(AbstractFFN):
             # Add the Dropout, ReLU, and BatchNorm block for all layers except the last one
             is_output_layer = (i == num_transitions - 1)
             if not is_output_layer:
-                modules.append(nn.Dropout(self.ffn_dropout_rate))
+                modules.append(nn.Dropout(self.dropout_rate))
                 modules.append(nn.ReLU())
                 modules.append(nn.BatchNorm1d(out_dim))
 
@@ -113,9 +110,9 @@ class LightAttentionFFN(AbstractFFN):
 
 
 
-class LightAttention(AbstractSequenceModel):
+class AbstractLightAttention(AbstractSequenceModel, ABC):
     """
-    An implementation of the Light Attention (LA) model from the paper:
+    An abstract base class for the Light Attention (LA) model from the paper:
     "Light attention predicts protein location from the language of life".
 
     The model uses two parallel 1D convolutional layers to process sequence embeddings.
@@ -125,44 +122,38 @@ class LightAttention(AbstractSequenceModel):
     Based on https://github.com/HannesStark/protein-localization/blob/master/models/light_attention.py
     """
 
-    @classmethod
-    @override
-    def config_type(cls) -> ConfigType:
-        """Links this model to its configuration entry."""
-        return ConfigType.LightAttention
-
-
     def __init__(self,
             in_channels: int,
-            in_seq_len: int = None,
-            out_channels: Optional[int] = None,
-            kernel_size: int = None,
-            conv_dropout_rate: float = None,
-            hidden_layers: HiddenLayers = None,
-            ffn_layer_class: Type[AbstractFFN] = LightAttentionFFN,  # Drop in replacement with FastKAN possible
-            ffn_layer_kwargs: Optional[dict] = None):
+            in_seq_len: int,
+            out_channels: Optional[int],
+            kernel_size: int,
+            conv_dropout_rate: float,
+            hidden_layers: HiddenLayers,
+            ffn_layer_class: Type[AbstractFFN],
+            ffn_layer_kwargs: Optional[dict]):
         """
-        Initializes the LightAttention model.
+        Initializes the abstract LightAttention model.
 
         Args:
             in_channels: The number of embedding dimensions for each sequence element.
             in_seq_len: The length of the input sequences.
-            out_channels: The number of output classes.
             kernel_size: The kernel size for the 1D convolutions.
             conv_dropout_rate: The dropout rate applied after the value convolution.
             hidden_layers: The configuration for the hidden layers of the final FFN.
+            ffn_layer_class: The class to use for the final feed-forward network (e.g., MLP, FastKAN).
+            ffn_layer_kwargs: Optional dictionary of keyword arguments for the FFN class.
+            out_channels: The number of output classes.
         """
-        config: LightAttentionConfig = cast(LightAttentionConfig, self.get_config())
 
         super().__init__(
             in_channels = in_channels,
             out_channels = out_channels,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len
+            in_seq_len = in_seq_len
         )
 
-        self.kernel_size = kernel_size if kernel_size is not None else config.kernel_size
-        self.conv_dropout_rate = conv_dropout_rate if conv_dropout_rate is not None else config.conv_dropout_rate
-        self.hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers
+        self.kernel_size = kernel_size
+        self.conv_dropout_rate = conv_dropout_rate
+        self.hidden_layers = hidden_layers
         self.ffn_layer_class = ffn_layer_class
         self.ffn_layer_kwargs = ffn_layer_kwargs if ffn_layer_kwargs is not None else {}
 
@@ -190,7 +181,8 @@ class LightAttention(AbstractSequenceModel):
             in_channels = self.in_channels * 2,  # self.feature_convolution.out_channels
             in_seq_len  = 1,
             hidden_layers = self.hidden_layers,
-            out_channels = self.out_channels
+            out_channels = self.out_channels,
+            **self.ffn_layer_kwargs
         )
 
 
@@ -238,13 +230,51 @@ class LightAttention(AbstractSequenceModel):
 
 
 
-class LightAttentionFastKAN(LightAttention):
+class LightAttentionLAMLP(AbstractLightAttention):
     """
-    A variant of the `LightAttention` model that replaces the original FFN
-    classifier with a `FastKAN`.
+    A concrete implementation of the original Light Attention architecture.
 
-    This class is identical to `LightAttention` in its core attention mechanism
-    but allows for a direct comparison of the `LightAttentionFFN` against a
+    This class combines the `AbstractLightAttention` base with the `LightAttentionFFN`,
+    faithfully replicating the model design from the source paper.
+    """
+
+    def __init__(self,
+            in_channels: int,
+            in_seq_len: int,
+            out_channels: Optional[int] = None,
+            kernel_size: int = None,
+            conv_dropout_rate: float = None,
+            hidden_layers: HiddenLayers = None,
+            ffn_dropout_rate: float = None):
+        from source.config import LightAttentionLAMLPConfig
+        config: LightAttentionLAMLPConfig = cast(LightAttentionLAMLPConfig, self.get_config())
+        self.ffn_dropout_rate = ffn_dropout_rate if ffn_dropout_rate is not None else config.ffn_dropout_rate
+        super().__init__(
+            in_channels = in_channels,
+            out_channels = out_channels,
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            kernel_size = kernel_size if kernel_size is not None else config.kernel_size,
+            conv_dropout_rate = conv_dropout_rate if kernel_size is not None else config.conv_dropout_rate,
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            ffn_layer_class = LightAttentionFFN,
+            ffn_layer_kwargs = dict(
+                dropout_rate = self.ffn_dropout_rate
+            )
+        )
+
+
+    @classmethod
+    @override
+    def config_type(cls) -> ConfigType: return ConfigType.LightAttentionLAMLP
+
+
+
+class LightAttentionFastKAN(AbstractLightAttention):
+    """
+    A concrete implementation of `AbstractLightAttention` that replaces the
+    original FFN classifier with a `FastKAN`.
+
+    This allows for a direct comparison of the `LightAttentionFFN` against a
     `FastKAN` in the final classification stage.
     """
 
@@ -257,13 +287,14 @@ class LightAttentionFastKAN(LightAttention):
             hidden_layers: HiddenLayers = None,
             grid_diff: int = None,
             num_grids: int = None):
+        from source.config import LightAttentionFastKANConfig
         config: LightAttentionFastKANConfig = cast(LightAttentionFastKANConfig, self.get_config())
         self.grid_diff = grid_diff if grid_diff is not None else config.grid_diff
         self.num_grids = num_grids if num_grids is not None else config.num_grids
         super().__init__(
             in_channels = in_channels,
-            in_seq_len = in_seq_len,
             out_channels = out_channels,
+            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             kernel_size = kernel_size if kernel_size is not None else config.kernel_size,
             conv_dropout_rate = conv_dropout_rate if kernel_size is not None else config.conv_dropout_rate,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
@@ -273,6 +304,7 @@ class LightAttentionFastKAN(LightAttention):
                 num_grids = self.num_grids
             )
         )
+
 
     @classmethod
     @override

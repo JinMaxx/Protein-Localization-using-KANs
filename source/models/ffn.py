@@ -78,10 +78,10 @@ class AbstractFFN(AbstractSequenceModel, ABC):
 
         self.hidden_layers: HiddenLayers = hidden_layers
         self._hidden_layers_exact: List[int] = hidden_layers.calculate_layers(input_dim=self.input_dim)
-
         self.layers: List[int] = ([self.input_dim] +
                                   self._hidden_layers_exact +
                                   [self.out_channels])
+        print(f"Layers: {self.layers}")
 
         self.ffn_layer: nn.Module = self.ffn_model_supplier(layers=self.layers).to(self.device)
 
@@ -189,7 +189,6 @@ class FastKAN(AbstractFFN):  # AbstractCheckpointFFN
     """  # with support for gradient checkpointing.
     # from fastkan import FastKAN as __KAN_impl
     from fasterkan import FasterKAN as __KAN_impl  # 1.5x faster
-
 
     def __init__(self,
             in_channels: int,

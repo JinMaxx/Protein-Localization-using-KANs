@@ -220,6 +220,8 @@ class Trainer(PredictionLoop):
         """Performs backpropagation and updates model weights."""
         self.optimizer.zero_grad(set_to_none=True)  # reduces memory fragmentation
         self.scaler.scale(loss).backward()
+        self.scaler.unscale_(self.optimizer) # Unscale the gradients back to their original scale before clipping
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)  # Clip gradients to prevent explosion
         self.scaler.step(self.optimizer)
         self.scaler.update()
 

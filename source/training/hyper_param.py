@@ -17,7 +17,7 @@ import torch
 import optuna
 
 from optuna import Trial, Study
-from optuna.samplers import TPESampler as Sampler  # GPSampler, TPESampler. Which Sampler might be better...?
+from optuna.samplers import GPSampler as Sampler  # GPSampler, TPESampler. Which Sampler might be better...?
 
 from typing_extensions import List, Type, Optional, Tuple
 from contextlib import nullcontext, AbstractContextManager
@@ -252,7 +252,7 @@ def tune(
         )
 
         figures.display(clear=False)
-        figures.save(sub_dir=f"study_evaluation/{study_name}")
+        figures.save(sub_dir=f"studies/{study_name}")
         del figures
 
 
@@ -327,12 +327,25 @@ def main(
     :param studies_save_dir: Directory to save the Optuna study object.
     :param metrics_file_path: Path to save performance metrics for each trial.
     :param log_file_path: If provided, redirects stdout to this file.
-    :param metrics_file_path: Path to save performance metrics for each trial.
     :return: A tuple containing the best model, its save state, and its metrics,
              or None if no trial completes successfully.
     """
     context: AbstractContextManager = TeeStdout(filename=log_file_path) if log_file_path is not None else nullcontext()
     with context:  # saving std out to log_file_path for tuning.
+
+        if model_save_dir is not None: model_save_dir = os.path.join(model_save_dir, "hyper_param")
+        if figures_save_dir is not None: figures_save_dir = os.path.join(figures_save_dir, "hyper_param")
+
+        print("################ Hyperparameter tuning ################")
+        print(f"model_class: {model_class.__name__}")
+        print(f"epochs: {epochs}, patience: {patience}, batch_size: {batch_size}")
+        print(f"learning_rate: {learning_rate}, learning_rate_decay: {learning_rate_decay}")
+        print(f"use_weights: {use_weights}, weight_decay: {weight_decay}")
+        print(f"train_data: {train_encodings_file_path}\nval_data: {val_encodings_file_path}")
+        print(f"n_trials: {n_trials}, timeout: {timeout}")
+        print(f"model_save_dir: {model_save_dir}\nfigures_save_dir: {figures_save_dir}")
+        print(f"studies_save_dir: {studies_save_dir}")
+        print(f"metrics_file_path: {metrics_file_path}")
 
         return tune(
             model_class = model_class,

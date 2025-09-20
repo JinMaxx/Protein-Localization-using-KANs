@@ -62,7 +62,7 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             ClassDistributionFigure: The created figure object.
         """
-        return cast(ClassDistributionFigure, self._add(ClassDistributionFigure(collection=self)))
+        return ClassDistributionFigure(collection=self)
 
 
     def raw_sequence_length_distribution(self,
@@ -79,11 +79,11 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             RawSequenceLengthDistributionFigure: The created figure object.
         """
-        return cast(RawSequenceLengthDistributionFigure, self._add(RawSequenceLengthDistributionFigure(
+        return RawSequenceLengthDistributionFigure(
             bins = bins,
             log_y = log_y,
             collection = self
-        )))
+        )
 
 
     def embedding_length_distribution(self,
@@ -100,11 +100,11 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             EmbeddingLengthDistributionFigure: The created figure object.
         """
-        return cast(EmbeddingLengthDistributionFigure, self._add(EmbeddingLengthDistributionFigure(
+        return EmbeddingLengthDistributionFigure(
             bins = bins,
             log_y = log_y,
             collection = self
-        )))
+        )
 
 
     def pairwise_distance_distribution(self,
@@ -123,12 +123,12 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             PairwiseDistanceDistributionFigure: The created figure object.
         """
-        return cast(PairwiseDistanceDistributionFigure, self._add(PairwiseDistanceDistributionFigure(
+        return PairwiseDistanceDistributionFigure(
             bins = bins,
             distance_metric = distance_metric,
             pooling_type = pooling_type,
             collection = self
-        )))
+        )
 
 
     def pca_embedding(self,
@@ -147,12 +147,12 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             PCAFigure: The created figure object.
         """
-        return cast(PCAFigure, self._add(PCAFigure(
+        return PCAFigure(
             n_components = n_components,
             random_state = random_state,
             pooling_type = pooling_type,
             collection = self
-        )))
+        )
 
 
     def tsne_embedding(self,
@@ -171,12 +171,12 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             TSNEFigure: The created figure object.
         """
-        return cast(TSNEFigure, self._add(TSNEFigure(
+        return TSNEFigure(
             n_components = n_components,
             random_state = random_state,
             pooling_type = pooling_type,
             collection = self
-        )))
+        )
 
 
     def umap_embedding(self,
@@ -195,12 +195,12 @@ class DataFiguresCollection(AbstractFiguresCollection):
         Returns:
             UMAPFigure: The created figure object.
         """
-        return cast(UMAPFigure, self._add(UMAPFigure(
+        return UMAPFigure(
             n_components = n_components,
             random_state = random_state,
             pooling_type = pooling_type,
             collection = self
-        )))
+        )
 
 
     @override
