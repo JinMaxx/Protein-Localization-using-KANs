@@ -51,9 +51,9 @@ def cleanup_zombie_trials(study: Study) -> bool:
     print(f"Found {len(zombie_trials)} zombie trial(s) from a previous crashed session.")
     for trial in zombie_trials:
         # noinspection PyProtectedMember
-        study._storage.set_trial_state_values(trial._trial_id, state=optuna.trial.TrialState.FAIL)
-        # noinspection PyProtectedMember
         study._storage.set_trial_user_attr(trial._trial_id, "failure_reason", "System crash (likely OOM CPU RAM)")
+        # noinspection PyProtectedMember
+        study._storage.set_trial_state_values(trial._trial_id, state=optuna.trial.TrialState.FAIL)
         print(f"Marked Trial #{trial.number} as FAILED.")
     return True
 
