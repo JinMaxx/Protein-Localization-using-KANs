@@ -6,26 +6,33 @@
 #  epochs: 2500 # Not seen in the paper but: --num_epochs default=2500
 #  patience: 80 # For early stopping as stated in paper.
 #  batch_size: 28 # Lower so my GPU Memory can handle my data and models.
-#  use_weights: false # They might have used weights but probably not as it is: --balanced_loss default=False
-#  weight_decay: 0.0 # They certainly did not use weight decay, but if so, it is done via --optimizer_parameters
+#  l2_penalty: 0.0 # They certainly did not use weight decay, but if so, it is done via --optimizer_parameters
+#  weight_factor: 0.0 # No class weights. # They might have used weights but probably not as it is: --balanced_loss default=False
 #  learning_rate: 0.00005 # As stated in the paper.
 #  learning_rate_decay: 1.0 # Constant learning rate as stated in the paper.
 
 
 Training:
-  epochs: 50 # Training is quite slow for me and this is a reasonable value. Most models converge at epoch 50.
+  epochs: 50 # Training is quite slow for me and this is a reasonable value. Most models converge at epoch 50
   patience: 20 # Reasonable for me as 20 epochs with not even a minimal increase is not worth waiting longer. Overfitting happens usually afterward.
   batch_size: 28 # Lower so my GPU Memory can handle my data and models.
-  use_weights: false # They might have used weights but probably not as it is: --balanced_loss default=False
-  weight_decay: 0.0 # They certainly did not use weight decay, but if so, it is done via --optimizer_parameters
+  l2_penalty: 0.0 # Consider using a slight l2 penalty of 0.0001 as most models overfit slightly with optimized hyperparameters.
+  weight_factor: 0.0 # No class weights. Consider a small weight factor of 0.2 for imbalanced data.
   learning_rate: 0.00005 # As stated in the paper.
-  learning_rate_decay: 0.98 # A decent gentle learning rate decay.
+  learning_rate_decay: 0.98  # Slight learning rate decay.
 
 
-# TODO: this config has no real effect
 HyperParam:
+  epochs: 20
+  patience: 14
+  batch_size: 28
+  l2_penalty: 0.0
+  weight_factor: 0.0 # Consider a small weight factor of 0.3.
+  learning_rate: 0.00005
+  learning_rate_decay: 0.98
+
   n_trials: 10  # trials
-  timeout: 14400  # 4-hour max: 60 sec/min * 60 min/hour * 4
+  timeout: # 14400  # 4-hour max: 60 sec/min * 60 min/hour * 4
 
 
 Encodings:
@@ -178,7 +185,7 @@ MLP_Per_Protein:
 
 LightAttentionFFN:
 
-  in_seq_len: 20
+  in_seq_len: 20  # Not the actual in_seq_len for LightAttention but for a standalone FFN to debug.
   hidden_layers: !HiddenLayersExact
     - 32
   dropout_rate: 0.25
@@ -347,7 +354,7 @@ LinearMLP:
   hidden_layers: !HiddenLayersRelative
     num_layers: 2
     relative_size: 0.4
-  reduced_seq_len: 20
+  reduced_seq_len: 10
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -370,12 +377,21 @@ AttentionFastKAN:
   hidden_layers: !HiddenLayersRelative
     num_layers: 1
     relative_size: 0.04
-  # hidden_layers: !HiddenLayersExact
-  #  - 768
-  reduced_seq_len: 20
-  grid_diff: 2.0
-  num_grids: 5
+  reduced_seq_len: 10
+  grid_diff: 1.5
+  num_grids: 7
   num_heads: 8
+
+  # 2de816ef-8c09-4628-8930-52e3fe969738
+  # 67.64%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.04, 1))
+  #- num_heads: 8
+  #- grid_diff: 1.5
+  #- num_grids: 7
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -388,12 +404,12 @@ AttentionFastKAN:
         step: 0.02
     reduced_seq_len: !RangeInt
       min: 10
-      max: 60
+      max: 40
       step: 10
     num_heads: !Categorical
       choices: [ 4, 8, 16 ]
     grid_diff: !RangeFloat
-      min: 1.0
+      min: 0.5
       max: 3.0
       step: 0.5
     num_grids: !RangeInt
@@ -406,10 +422,19 @@ AttentionMLP:
 
   in_seq_len: 1023
   hidden_layers: !HiddenLayersRelative
-    num_layers: 2
+    num_layers: 3
     relative_size: 0.4
-  reduced_seq_len: 20
+  reduced_seq_len: 10
   num_heads: 8
+
+  # 71020308-7a83-46a5-872c-9768ece46f49
+  # 64.11%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.4, 3))
+  #- num_heads: 8
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -429,19 +454,21 @@ AttentionMLP:
 
 
 PositionalFastKAN:
+  # todo find flaw
 
   in_seq_len: 1023
   hidden_layers: !HiddenLayersRelative
     num_layers: 1
-    relative_size: 0.04
-  # hidden_layers: !HiddenLayersExact
-  #  - 384
-  reduced_seq_len: 20
+    relative_size: 0.14
+  reduced_seq_len: 10
   reduced_channels: 512
   kernel_size: 3
   weights_scalar: 2.0
   grid_diff: 2.0
-  num_grids: 5
+  num_grids: 6
+
+  # 1c5a
+  # 61.1%
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -481,11 +508,22 @@ PositionalMLP:
   in_seq_len: 1023
   hidden_layers: !HiddenLayersRelative
     num_layers: 2
-    relative_size: 0.4
-  reduced_seq_len: 20
+    relative_size: 0.5
+  reduced_seq_len: 10
   reduced_channels: 512
   kernel_size: 3
   weights_scalar: 2.0
+
+  # 1f52f9ad-de0c-4ac9-9c37-90cf42e85468
+  # 64.4%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- reduced_channels: 512
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.5, 2))
+  #- kernel_size: 3
+  #- weights_scalar: 2.0
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -516,13 +554,25 @@ UNetFastKAN:
 
   in_seq_len: 1023
   hidden_layers: !HiddenLayersRelative
-    num_layers: 1
-    relative_size: 0.04
-  reduced_seq_len: 20
-  reduced_channels: 512
+    num_layers: 2
+    relative_size: 0.16
+  reduced_seq_len: 10
+  reduced_channels: 960
   kernel_size: 3
-  grid_diff: 2.0
-  num_grids: 5
+  grid_diff: 1.0
+  num_grids: 8
+
+  # f4c2340a-94be-4547-b5b3-ad2f19a9c633
+  # 63.66
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- reduced_channels: 960
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.16, 2))
+  #- kernel_size: 3
+  #- grid_diff: 1.0
+  #- num_grids: 8
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -558,10 +608,29 @@ UNetMLP:
   in_seq_len: 1023
   hidden_layers: !HiddenLayersRelative
     num_layers: 2
-    relative_size: 0.4
-  reduced_seq_len: 20
-  reduced_channels: 512
+    relative_size: 0.8
+  reduced_seq_len: 10
+  reduced_channels: 960
   kernel_size: 3
+
+  # UNetMLP_d465 63%
+  #
+  #    in_seq_len: 1023
+  #    hidden_layer_relative: 0.8
+  #    num_hidden_layers: 2
+  #    hidden_layer_exact: None
+  #    reduced_seq_len: 20
+  #    reduced_channels: 512
+
+  # 89b1e76d-c68d-4d20-8b8a-5d9ed3e1267a
+  # 62.56%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- reduced_channels: 960
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.8, 2))
+  #- kernel_size: 3
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -597,8 +666,22 @@ AttentionLstmHybridFastKAN:
   lstm_num_layers: 2
   dropout1_rate: 0.25
   dropout2_rate: 0.25
-  grid_diff: 2.0
-  num_grids: 5
+  grid_diff: 1.0
+  num_grids: 8
+
+  # 59f12f39-ce40-4edc-bd54-a372ec0c9702
+  # 62.68
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- attention_num_heads: 8
+  #- lstm_hidden_size: 256
+  #- lstm_num_layers: 2
+  #- dropout1_rate: 0.25
+  #- dropout2_rate: 0.25
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.04, 1))
+  #- grid_diff: 1.0
+  #- num_grids: 8
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -619,9 +702,9 @@ AttentionLstmHybridFastKAN:
       min: 1
       max: 4
     grid_diff: !RangeFloat
-      min: 2.0
-      max: 2.0
-      step: 0.0
+      min: 1.0
+      max: 3.0
+      step: 0.5
     num_grids: !RangeInt
       min: 4
       max: 6
@@ -629,19 +712,32 @@ AttentionLstmHybridFastKAN:
 
 
 LstmAttentionReductionHybridFastKAN:
-  # Simplified the model configuration due to clear signs of overfitting.
 
   in_seq_len: 1023 # Input sequence length from ProtT5 embeddings
   hidden_layers: !HiddenLayersRelative
     num_layers: 1
     relative_size: 0.04
-  reduced_seq_len: 20
+  reduced_seq_len: 10
   lstm_hidden_size: 128
   lstm_num_layers: 2
-  dropout_rate: 0.40
+  dropout_rate: 0.25
   num_heads: 8
-  grid_diff: 2.0
-  num_grids: 5
+  grid_diff: 1.0
+  num_grids: 8
+
+  # dcac07f3-37b2-4c8c-9268-c91d595b4e56
+  # 61.84%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- reduced_seq_len: 10
+  #- lstm_hidden_size: 128
+  #- lstm_num_layers: 2
+  #- dropout_rate: 0.25
+  #- hidden_layers: HiddenLayers(kind=Type.RELATIVE, value=(0.04, 1))
+  #- num_heads: 8
+  #- grid_diff: 1.0
+  #- num_grids: 8
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -669,9 +765,9 @@ LstmAttentionReductionHybridFastKAN:
     num_heads: !Categorical
       choices: [ 4, 8, 16 ]
     grid_diff: !RangeFloat
-      min: 2.0
-      max: 2.0
-      step: 0.0
+      min: 1.0
+      max: 3.0
+      step: 0.5
     num_grids: !RangeInt
       min: 4
       max: 6
@@ -687,6 +783,16 @@ LightAttention:
   kernel_size: 9
   conv_dropout_rate: 0.25
   ffn_dropout_rate: 0.25
+
+  # beb27502-bd1c-443b-bc3d-81a8f93897b0
+  # 64.41%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- kernel_size: 9
+  #- conv_dropout_rate: 0.25
+  #- hidden_layers: HiddenLayers(kind=Type.EXACT, value=[32])
+  #- ffn_dropout_rate: 0.25
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -716,11 +822,22 @@ LightAttentionFastKAN:
 
   in_seq_len: 1023  # Input sequence length from ProtT5 embeddings
   hidden_layers: !HiddenLayersExact
-    - 128 # Going from 2048 (2 * input_channels) to 32 is a massive reduction.
+    - 32 # Going from 2048 (2 * input_channels) to 32 is a massive reduction.
   kernel_size: 9
   conv_dropout_rate: 0.25
-  grid_diff: 1.5  # smaller window for less overfitting
-  num_grids: 5
+  grid_diff: 1.0  # smaller window for less noise
+  num_grids: 8  # expressive activation function
+
+  # c4cd8511-823d-4829-984c-2a8641f543c1
+  # 65.01%
+  #- in_channels: 1024
+  #- in_seq_len: 1023
+  #- out_channels: 10
+  #- kernel_size: 9
+  #- conv_dropout_rate: 0.25
+  #- hidden_layers: HiddenLayers(kind=Type.EXACT, value=[32])
+  #- grid_diff: 1.0
+  #- num_grids: 8
 
   test_parameters:
     hidden_layers: !HiddenLayers
@@ -739,9 +856,9 @@ LightAttentionFastKAN:
       min: 0.1
       max: 0.5
     grid_diff: !RangeFloat
-      min: 2.0
-      max: 2.0
-      step: 0.0
+      min: 1.0
+      max: 3.0
+      step: 0.5
     num_grids: !RangeInt
       min: 4
       max: 6

@@ -171,8 +171,8 @@ class AccuracyComparisonFigure(_AbstractEvaluationFigure):
         self._model_names.append(model_name)
         assert len(self._model_names) == len(set(self._model_names)), "model_names must be unique"
 
-        accuracy: float = metrics.accuracy()
-        self._accuracies.append(accuracy)
+        if metrics_sampled is not None: self._accuracies.append(metrics_sampled.accuracies_mean())
+        else: self._accuracies.append(metrics.accuracy())
 
         self._colors.append('orange')
 
@@ -182,6 +182,7 @@ class AccuracyComparisonFigure(_AbstractEvaluationFigure):
             self._errors.append(error)  # (np.sqrt(accuracy * (1 - accuracy) / total) if total > 0 else 0.0) # standard error (multiply by 1.96 for 95% confidence interval)
         else:
             self._errors.append(float('nan'))  # hiding error bars
+            # TODO: Somehow plotly still shows error bars for nan values...
 
         # # keeping preset data in original order
         # pre_init_names = self._model_names[:self._num_pre_init]
@@ -219,7 +220,7 @@ class AccuracyComparisonFigure(_AbstractEvaluationFigure):
                 array = self._errors,
                 visible = True,
                 color = 'black',
-                thickness = 1.5
+                thickness = 1.0
             ),
             text = [
                 f"{acc * 100:.0f}%" if color == 'grey' else f"{acc * 100:.1f}%"

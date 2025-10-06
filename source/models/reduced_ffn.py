@@ -468,7 +468,7 @@ class PositionalFastKAN(AbstractReducedFastKAN):  # Adding functionality to Fast
         config: PositionalFastKANConfig = cast(PositionalFastKANConfig, self.get_config())
 
         self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
-        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.kernel_size
+        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.weights_scalar
 
         super().__init__(
             in_channels = in_channels,
@@ -517,7 +517,7 @@ class PositionalMLP(AbstractReducedFFN):
         config: PositionalMLPConfig = cast(PositionalMLPConfig, self.get_config())
 
         self.kernel_size: int = kernel_size if kernel_size is not None else config.kernel_size
-        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.kernel_size
+        self.weights_scalar: float = weights_scalar if weights_scalar is not None else config.weights_scalar
 
         super().__init__(
             in_channels = in_channels,

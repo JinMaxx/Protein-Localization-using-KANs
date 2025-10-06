@@ -3,7 +3,7 @@ import torch
 import tempfile
 import unittest
 
-from source.models.other.light_attention import LightAttentionFFN, LightAttentionLAMLP, LightAttentionFastKAN
+from source.models.other.light_attention import LightAttentionFFN, LightAttention, LightAttentionFastKAN
 from source.models.other.attention_lstm_hybrid import AttentionLstmHybridFastKAN
 from source.models.other.lstm_reduction_hybrid import LstmAttentionReductionHybridFastKAN
 from source.training.utils.hidden_layers import HiddenLayers
@@ -137,7 +137,7 @@ class TestModelCreation(unittest.TestCase):
 
     def test_create_light_attention(self):
         """Tests the creation of a LightAttention model."""
-        model = LightAttentionLAMLP(
+        model = LightAttention(
             in_channels = self.in_channels,
             in_seq_len = self.in_seq_len
         )

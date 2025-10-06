@@ -85,7 +85,7 @@ _save_original source_file original_copy:
 # Usage: _create_patch <original_copy> <modified_file> <patch_output_file>
 _create_patch original_copy modified_file patch_file:
     @echo "Creating patch file: {{ patch_file }}"
-    @-diff -u "{{ original_copy }}" "{{ modified_file }}" > "{{ patch_file }}"
+    @diff -u "{{ original_copy }}" "{{ modified_file }}" > "{{ patch_file }}"
     @echo "Patch created successfully."
 
 # Applies a patch to a target file.

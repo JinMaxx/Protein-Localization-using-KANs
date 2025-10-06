@@ -28,9 +28,7 @@ from source.training.train_model import train_new as train, SaveState
 from source.training.utils.context_manager import TeeStdout, OptionalTempDir
 from source.training.training_figures import HyperParamFiguresCollection, _AbstractHyperParamFigure
 
-from source.config import TrainingConfig, HyperParamConfig, ConfigType, parse_config
-
-training_config: TrainingConfig = parse_config(ConfigType.Training)
+from source.config import HyperParamConfig, ConfigType, parse_config
 hyper_param_config: HyperParamConfig = parse_config(ConfigType.HyperParam)
 
 
@@ -63,13 +61,13 @@ def tune(
         model_class: Type[AbstractTunableModel],
         train_encodings_file_path: str,
         val_encodings_file_path: str,
-        epochs: int = training_config.epochs,
-        patience: int = training_config.patience,
-        batch_size: int = training_config.batch_size,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
-        learning_rate: float = training_config.learning_rate,
-        learning_rate_decay: float = training_config.learning_rate_decay,
+        epochs: int = hyper_param_config.epochs,
+        patience: int = hyper_param_config.patience,
+        batch_size: int = hyper_param_config.batch_size,
+        l2_penalty: float = hyper_param_config.l2_penalty,
+        weight_factor: float = hyper_param_config.weight_factor,
+        learning_rate: float = hyper_param_config.learning_rate,
+        learning_rate_decay: float = hyper_param_config.learning_rate_decay,
         n_trials: Optional[int] = hyper_param_config.n_trials,
         timeout: Optional[int] = hyper_param_config.n_trials,
         model_save_dir: Optional[str] = None,
@@ -91,8 +89,8 @@ def tune(
     :param epochs: The maximum number of training epochs per trial.
     :param patience: The patience for early stopping.
     :param batch_size: The batch size for training.
-    :param use_weights: Whether to use class weights for the optimizer.
-    :param weight_decay: The weight decay for the optimizer.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: The learning rate for the optimizer.
     :param learning_rate_decay: The learning rate decay factor.
     :param n_trials: The number of trials to run.
@@ -130,8 +128,8 @@ def tune(
                     val_encodings_file_path = val_encodings_file_path,
                     learning_rate_decay = learning_rate_decay,
                     learning_rate = learning_rate,
-                    weight_decay = weight_decay,
-                    use_weights = use_weights,
+                    weight_factor = weight_factor,
+                    l2_penalty = l2_penalty,
                     batch_size = batch_size,
                     patience = patience,
                     epochs = epochs,
@@ -287,13 +285,13 @@ def main(
         model_class: Type[AbstractTunableModel],
         train_encodings_file_path: str,
         val_encodings_file_path: str,
-        epochs: int = training_config.epochs,
-        patience: int = training_config.patience,
-        batch_size: int = training_config.batch_size,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
-        learning_rate: float = training_config.learning_rate,
-        learning_rate_decay: float = training_config.learning_rate_decay,
+        epochs: int = hyper_param_config.epochs,
+        patience: int = hyper_param_config.patience,
+        batch_size: int = hyper_param_config.batch_size,
+        l2_penalty: float = hyper_param_config.l2_penalty,
+        weight_factor: float = hyper_param_config.weight_factor,
+        learning_rate: float = hyper_param_config.learning_rate,
+        learning_rate_decay: float = hyper_param_config.learning_rate_decay,
         n_trials: Optional[int] = hyper_param_config.n_trials,
         timeout: Optional[int] = hyper_param_config.n_trials,
         model_save_dir: Optional[str] = None,
@@ -315,8 +313,8 @@ def main(
     :param epochs: The maximum number of training epochs per trial.
     :param patience: The patience for early stopping.
     :param batch_size: The batch size for training.
-    :param use_weights: Whether to use class weights for the optimizer.
-    :param weight_decay: The weight decay for the optimizer.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: The learning rate for the optimizer.
     :param learning_rate_decay: The learning rate decay factor.
     :param n_trials: The number of trials to run.
@@ -340,7 +338,7 @@ def main(
         print(f"model_class: {model_class.__name__}")
         print(f"epochs: {epochs}, patience: {patience}, batch_size: {batch_size}")
         print(f"learning_rate: {learning_rate}, learning_rate_decay: {learning_rate_decay}")
-        print(f"use_weights: {use_weights}, weight_decay: {weight_decay}")
+        print(f"l2_penalty: {l2_penalty}, weight_factor: {weight_factor}")
         print(f"train_data: {train_encodings_file_path}\nval_data: {val_encodings_file_path}")
         print(f"n_trials: {n_trials}, timeout: {timeout}")
         print(f"model_save_dir: {model_save_dir}\nfigures_save_dir: {figures_save_dir}")
@@ -354,8 +352,8 @@ def main(
             epochs = epochs,
             patience = patience,
             batch_size = batch_size,
-            use_weights = use_weights,
-            weight_decay = weight_decay,
+            l2_penalty = l2_penalty,
+            weight_factor = weight_factor,
             learning_rate = learning_rate,
             learning_rate_decay = learning_rate_decay,
             n_trials = n_trials,

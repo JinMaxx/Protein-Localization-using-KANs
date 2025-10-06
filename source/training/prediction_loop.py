@@ -54,13 +54,15 @@ class PredictionLoop(ABC):
     def __init__(self,
             model: AbstractModel,
             data_handler: _BaseDataHandler,
-            use_weights: bool = False):
+            weight_factor: Optional[float] = None):
         """
         Initializes the PredictionLoop.
 
         :param model: The model to use for predictions.
         :param data_handler: The data handler that provides the dataset.
-        :param use_weights: If True, applies class weights to the loss function to handle imbalanced datasets.
+        :param weight_factor: A float between 0.0 and 1.0 to interpolate between
+                              uniform weights (0.0) and full class weights (1.0).
+                              If None, full weights (1.0) are used.
         """
         self.model: AbstractModel = model.to(model.device)
 
@@ -68,11 +70,24 @@ class PredictionLoop(ABC):
         self.data_loader: Data_Loader_T = data_handler.create_dataloader(collate_function=model.collate_function)
 
         weights_tensor: Optional[torch.Tensor] = None
-        if use_weights:
-            # Ensure weights are ordered correctly according to class labels
-            weights: List[float] = [data_handler.class_weights[label] for label in sorted(data_handler.class_weights.keys(), key=lambda l: l.value)]
-            weights_tensor = torch.tensor(weights, dtype=torch.float32).to(model.device)
-        
+        weight_factor = weight_factor if weight_factor is not None else 0.0
+        if weight_factor > 0.0:
+            if not (0.0 <= weight_factor <= 1.0):
+                raise ValueError(f"weight_factor must be between 0.0 and 1.0, but got {weight_factor}")
+
+            weights_list: List[float] = [ # Full class weights based on inverse frequency
+                data_handler.class_weights[label] for label in
+                sorted(data_handler.class_weights.keys(), key=lambda l: l.value)
+            ]
+            weights_tensor = torch.tensor(weights_list, dtype=torch.float32).to(model.device)
+            # original weights
+
+            if weight_factor < 1.0:
+                weights_tensor = (                                              # Linear Interpolation
+                        (1.0 - weight_factor) * torch.ones_like(weights_tensor) # (1-weight_factor) * uniform
+                        + weight_factor * weights_tensor                        # + weight_factor * original
+                )
+
         self.criterion = CrossEntropyLoss(weight=weights_tensor, reduction='none').to(model.device)
     
 
@@ -176,30 +191,31 @@ class Trainer(PredictionLoop):
     """
 
     def __init__(self,
-            model: AbstractModel,
-            data_handler: _BaseDataHandler,
-            use_weights: bool,
-            weight_decay: float,
-            learning_rate: float,
-            learning_rate_decay: float
-    ):
+                 model: AbstractModel,
+                 data_handler: _BaseDataHandler,
+                 l2_penalty: float,
+                 learning_rate: float,
+                 learning_rate_decay: float,
+                 weight_factor: Optional[float] = None):
         """
         Initializes the Trainer.
 
         :param model: The model to be trained.
         :param data_handler: The data handler for the training set.
-        :param use_weights: If True, applies class weights to the loss.
-        :param weight_decay: The weight decay (L2 penalty) for the AdamW optimizer.
+        :param l2_penalty: The L2 penalty (weight decay) for the AdamW optimizer.
         :param learning_rate: The initial learning rate for the optimizer.
         :param learning_rate_decay: The decay factor for the exponential learning rate scheduler.
+        :param weight_factor: A float between 0.0 and 1.0 to interpolate between
+                              uniform weights (0.0) and full class weights (1.0).
+                              If None, full weights (1.0) are used.
         """
         super().__init__(
             model = model,
             data_handler = data_handler,
-            use_weights = use_weights
+            weight_factor = weight_factor
         )
 
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=l2_penalty)
 
         # If learning_rate_decay is 1.0, it means no decay -> skip creating the scheduler
         self.scheduler = None
@@ -257,7 +273,7 @@ class Validator(PredictionLoop):
         :param model: The model to be validated.
         :param data_handler: The data handler for the validation set.
         """
-        super().__init__(model=model, data_handler=data_handler)
+        super().__init__(model=model, data_handler=data_handler, weight_factor=0.0)
 
 
     @override

@@ -155,14 +155,14 @@ class BaseConfig(ABC):
 # ----------------- Python Module Config ------------------
 
 @dataclass
-class TrainingConfig(BaseConfig):
-    """Configuration settings for the model training loop."""
+class AbstractTrainingConfig(BaseConfig):
+    """Abstract configuration settings for the model training loop."""
 
     epochs: int
     patience: int
     batch_size: int
-    use_weights: bool
-    weight_decay: float
+    l2_penalty: float
+    weight_factor: float
     learning_rate: float
     learning_rate_decay: float
 
@@ -172,24 +172,32 @@ class TrainingConfig(BaseConfig):
         if self.epochs < 1: raise ValueError("Epochs must be at least 1.")
         if self.patience <= 0: raise ValueError("Patience must be positive.")
         if self.batch_size <= 0: raise ValueError("Batch size must be positive.")
-        if not (0.0 <= self.weight_decay <= 1.0): raise ValueError("Weight decay must be between [0.0: 1.0].")
+        if not (0.0 <= self.l2_penalty <= 1.0): raise ValueError("L2 penalty must be between [0.0: 1.0].")
+        if not (0.0 <= self.weight_factor <= 1.0): raise ValueError("Weight factor must be between [0.0: 1.0].")
         if not (0.0 < self.learning_rate < 1.0): raise ValueError("Learning rate must be between ]0.0: 1.0[.")
         if not (0.0 < self.learning_rate_decay <= 1.0): raise ValueError("Learning rate decay must be between ]0.0: 1.0].")
 
 
 
 @dataclass
-class HyperParamConfig(BaseConfig):
+class TrainingConfig(AbstractTrainingConfig):
+    """Configuration settings for the model training loop."""
+    pass
+
+
+
+@dataclass
+class HyperParamConfig(AbstractTrainingConfig):
     """Configuration for the hyperparameter tuning process."""
 
     n_trials: int
-    timeout: int
+    timeout: Optional[int] = None
 
     @override
     def validate(self):
         """Ensures that trial and timeout values are positive."""
         if self.n_trials < 1: raise ValueError("Number of trials must be at least 1.")
-        if self.timeout < 1: raise ValueError("Timeout must be at least 1.")
+        if  self.timeout is not None and self.timeout < 1: raise ValueError("Timeout must be at least 1.")
 
 
 

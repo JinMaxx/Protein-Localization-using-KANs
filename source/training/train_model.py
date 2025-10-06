@@ -73,8 +73,8 @@ def __train(
         metrics_figures: MetricsFiguresCollection,
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
+        l2_penalty: float = training_config.l2_penalty,
+        weight_factor: float = training_config.weight_factor,
         learning_rate: float = training_config.learning_rate,
         learning_rate_decay: float = training_config.learning_rate_decay,
         model_save_dir: Optional[str] = None,
@@ -94,8 +94,8 @@ def __train(
     :param metrics_figures: Collection for generating detailed evaluation plots for the best-performing model state.
     :param epochs: The total number of epochs to train.
     :param patience: Number of epochs to wait for improvement before early stopping.
-    :param use_weights: Whether to use class weights in the loss function.
-    :param weight_decay: The weight decay (L2 penalty) for the optimizer.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: The initial learning rate for the optimizer.
     :param learning_rate_decay: The decay factor for the learning rate scheduler.
     :param model_save_dir: Directory to save the best model. Uses a temp dir if None.
@@ -109,10 +109,10 @@ def __train(
     trainer: Trainer = Trainer(
         model = model,
         data_handler = train_data_handler,
-        use_weights = use_weights,
-        weight_decay = weight_decay,
+        l2_penalty = l2_penalty,
         learning_rate = learning_rate,
         learning_rate_decay = learning_rate_decay,
+        weight_factor = weight_factor
     )
     validator: Validator = Validator(
         model = model,
@@ -238,13 +238,10 @@ def train_wrap(
         train_data_handler: DataHandler,
         val_data_handler: DataHandler,
         figures_save_dir: str,
-        # figures: TrainingFiguresCollection,
-        # epoch_figures: EpochFiguresCollection,
-        # metrics_figures: MetricsFiguresCollection,
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
+        l2_penalty: float = training_config.l2_penalty,
+        weight_factor: float = training_config.weight_factor,
         learning_rate: float = training_config.learning_rate,
         learning_rate_decay: float = training_config.learning_rate_decay,
         model_save_dir: Optional[str] = None,
@@ -260,8 +257,8 @@ def train_wrap(
     :param figures_save_dir: Directory to save updated figures.
     :param epochs: Total number of epochs for this training run.
     :param patience: Patience for early stopping.
-    :param use_weights: Whether to use class weights.
-    :param weight_decay: L2 penalty for the optimizer.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: Initial learning rate.
     :param learning_rate_decay: Learning rate decay factor.
     :param model_save_dir: Directory to save the final model.
@@ -321,12 +318,12 @@ def train_wrap(
             metrics_figures = metrics_figures,
             epochs = epochs,
             patience = patience,
-            use_weights = use_weights,
-            weight_decay = weight_decay,
+            l2_penalty = l2_penalty,
+            weight_factor = weight_factor,
             learning_rate = learning_rate,
             learning_rate_decay = learning_rate_decay,
-            model_save_dir=model_save_dir,
-            metrics_file_path=metrics_file_path
+            model_save_dir = model_save_dir,
+            metrics_file_path = metrics_file_path
         )
         model: AbstractModel
         save_state: SaveState
@@ -340,7 +337,10 @@ def train_wrap(
             generate_training_report(
                 model = model,
                 best_metrics = metrics,
-                figures_save_dir = figures_save_dir
+                figures_save_dir = figures_save_dir,
+                additional_texts = [
+                    ("Best Epoch", str(save_state.current_epoch()))
+                ]
             )
 
         return model, save_state, metrics
@@ -351,7 +351,11 @@ def train_wrap(
             generate_training_report(
                 model = error.model,
                 best_metrics = error.metrics, # Will be None if interrupted early
-                figures_save_dir = figures_save_dir
+                figures_save_dir = figures_save_dir,
+                additional_texts = [
+                    ("Best Epoch", str(save_state.current_epoch())),
+                    ("Error", "Interrupted Training")
+                ]
             )
         raise error # Re-raise the exception to stop the script
 
@@ -379,8 +383,8 @@ def train_new(
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
         batch_size: int = training_config.batch_size,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
+        l2_penalty: float = training_config.l2_penalty,
+        weight_factor: float = training_config.weight_factor,
         learning_rate: float = training_config.learning_rate,
         learning_rate_decay: float = training_config.learning_rate_decay,
         model_save_dir: Optional[str] = None,
@@ -396,8 +400,8 @@ def train_new(
     :param epochs: Number of epochs to train.
     :param patience: Patience for early stopping.
     :param batch_size: Batch size for training and validation.
-    :param use_weights: Whether to use a weighted loss.
-    :param weight_decay: L2 penalty.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: Initial learning rate.
     :param learning_rate_decay: Learning rate decay factor.
     :param model_save_dir: Directory to save the trained model.
@@ -422,13 +426,10 @@ def train_new(
         train_data_handler = train_data_handler,
         val_data_handler = val_data_handler,
         figures_save_dir = figures_save_dir,
-        # figures = figures,
-        # epoch_figures = epoch_figures,
-        # metrics_figures = metrics_figures,
         epochs = epochs,
         patience = patience,
-        use_weights = use_weights,
-        weight_decay = weight_decay,
+        l2_penalty = l2_penalty,
+        weight_factor = weight_factor,
         learning_rate = learning_rate,
         learning_rate_decay = learning_rate_decay,
         model_save_dir = model_save_dir,
@@ -449,8 +450,8 @@ def train_continue(
         epochs: int = training_config.epochs,
         patience: int = training_config.patience,
         batch_size: int = training_config.batch_size,
-        use_weights: bool = training_config.use_weights,
-        weight_decay: float = training_config.weight_decay,
+        l2_penalty: float = training_config.l2_penalty,
+        weight_factor: float = training_config.weight_factor,
         learning_rate: float = training_config.learning_rate,
         learning_rate_decay: float = training_config.learning_rate_decay,
         model_save_dir: Optional[str] = None,
@@ -466,8 +467,8 @@ def train_continue(
     :param epochs: Number of additional epochs to train.
     :param patience: Patience for early stopping.
     :param batch_size: Batch size for data loaders.
-    :param use_weights: Whether to use weighted loss.
-    :param weight_decay: L2 penalty.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: Initial learning rate.
     :param learning_rate_decay: Learning rate decay factor.
     :param model_save_dir: Directory to save the updated model.
@@ -496,13 +497,10 @@ def train_continue(
         train_data_handler = train_data_handler,
         val_data_handler = val_data_handler,
         figures_save_dir = figures_save_dir,
-        # figures = figures,
-        # epoch_figures = epoch_figures,
-        # metrics_figures = metrics_figures,
         epochs = epochs,
         patience = patience,
-        use_weights = use_weights,
-        weight_decay = weight_decay,
+        l2_penalty = l2_penalty,
+        weight_factor = weight_factor,
         learning_rate = learning_rate,
         learning_rate_decay = learning_rate_decay,
         model_save_dir = model_save_dir,
@@ -522,15 +520,15 @@ def main(model: Type[AbstractModel] | str,
          epochs: int = training_config.epochs,
          patience: int = training_config.patience,
          batch_size: int = training_config.batch_size,
-         use_weights: bool = training_config.use_weights,
-         weight_decay: float = training_config.weight_decay,
+         l2_penalty: float = training_config.l2_penalty,
+         weight_factor: float = training_config.weight_factor,
          learning_rate: float = training_config.learning_rate,
          learning_rate_decay: float = training_config.learning_rate_decay,
          model_save_dir: Optional[str] = None,
          figures_save_dir: Optional[str] = None,
          metrics_file_path: Optional[str] = None,
          log_file_path: Optional[str] = None
-) -> Optional[Tuple[AbstractModel, SaveState, Optional[Metrics]]]:
+         ) -> Optional[Tuple[AbstractModel, SaveState, Optional[Metrics]]]:
     """
     Main entry point to start or continue a training process.
 
@@ -543,8 +541,8 @@ def main(model: Type[AbstractModel] | str,
     :param epochs: Number of epochs to train.
     :param patience: Patience for early stopping.
     :param batch_size: Data batch size.
-    :param use_weights: Whether to use weighted loss.
-    :param weight_decay: L2 penalty.
+    :param l2_penalty: The L2 penalty (weight decay) for the optimizer.
+    :param weight_factor: The factor to scale class weights by. (1.0 full weights if using weights, 0.0 no weights)
     :param learning_rate: Initial learning rate.
     :param learning_rate_decay: Learning rate decay factor.
     :param model_save_dir: Directory to save models.
@@ -563,7 +561,7 @@ def main(model: Type[AbstractModel] | str,
         print("################ Training ################")
         print(f"epochs: {epochs}, patience: {patience}, batch_size: {batch_size}")
         print(f"learning_rate: {learning_rate}, learning_rate_decay: {learning_rate_decay}")
-        print(f"use_weights: {use_weights}, weight_decay: {weight_decay}")
+        print(f"l2_penalty: {l2_penalty}, weight_factor: {weight_factor}")
         print(f"train_data: {train_encodings_file_path}\nval_data: {val_encodings_file_path}")
         print(f"model_save_dir: {model_save_dir}\nfigures_save_dir: {figures_save_dir}")
         print(f"metrics_file_path: {metrics_file_path}")
@@ -579,8 +577,8 @@ def main(model: Type[AbstractModel] | str,
                     epochs = epochs,
                     patience = patience,
                     batch_size = batch_size,
-                    use_weights = use_weights,
-                    weight_decay = weight_decay,
+                    l2_penalty = l2_penalty,
+                    weight_factor = weight_factor,
                     learning_rate = learning_rate,
                     learning_rate_decay = learning_rate_decay,
                     model_save_dir = model_save_dir,
@@ -597,8 +595,8 @@ def main(model: Type[AbstractModel] | str,
                     epochs = epochs,
                     patience = patience,
                     batch_size = batch_size,
-                    use_weights = use_weights,
-                    weight_decay = weight_decay,
+                    l2_penalty = l2_penalty,
+                    weight_factor = weight_factor,
                     learning_rate = learning_rate,
                     learning_rate_decay = learning_rate_decay,
                     model_save_dir = model_save_dir,

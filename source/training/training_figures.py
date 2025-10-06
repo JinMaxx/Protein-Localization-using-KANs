@@ -329,8 +329,8 @@ class EpochFiguresCollection(AbstractFiguresCollection):
         """
         super().update(
             epoch = epoch,
-            epoch_mark = epoch_mark,
             epoch_cut = epoch_cut,
+            epoch_mark = epoch_mark,
             performance_values = performance_values,
             train_loss = train_loss,
             val_loss = val_loss,
@@ -474,12 +474,28 @@ class EpochDualAxisFigure(_AbstractEpochFigure):
 
     @override
     def update(self, **kwargs) -> None:
-        epoch_cut = kwargs.get("epoch_cut")
+        epoch_cut: Optional[int] = kwargs.get("epoch_cut")
         if epoch_cut is not None:
             self._fig.add_vline(
                 x = epoch_cut,
-                line = dict(color="red", width=1, dash="dash"),
+                line = dict(
+                    color = "red",
+                    width = 1,
+                    dash = "dash"
+                ),
                 annotation_text = str(epoch_cut),
+                annotation_position = "top"
+            )
+        epoch_mark: Optional[Tuple[int, Optional[str]]] = kwargs.get("epoch_mark")
+        if epoch_mark is not None:
+            self._fig.add_vline(
+                x = epoch_mark[0],
+                line = dict(
+                    color = epoch_mark[1] if epoch_mark[1] is not None else "green",
+                    width = 1,
+                    dash = "dash"
+                ),
+                annotation_text = str(epoch_mark[0]),
                 annotation_position = "top"
             )
         self.fig_left.update(**kwargs)

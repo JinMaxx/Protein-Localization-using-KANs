@@ -90,14 +90,23 @@ class MaxPoolConvLayer(AbstractReductionLayer):
 
     @override
     def forward(self, x: Encodings_Batch_PerResidue_T, attention_mask: AttentionMask_Batch_T):
-        x = x * attention_mask.unsqueeze(-1)
+        # x: [batch_size, seq_len, in_channels]
+        # attention_mask: [batch_size, seq_len], boolean
 
-        # Only interpolate/pool the sequence to the output length
-        # x shape: [batch_size, seq_len, in_channels]
-        x = x.permute(0, 2, 1)  # [batch_size, in_channels, seq_len]
-        x_pooled = torch.nn.functional.adaptive_max_pool1d(
-            x, self.out_seq_len
-        )
+        # Transpose for pooling operations
+        x_permuted = x.permute(0, 2, 1)  # [batch_size, in_channels, seq_len]
+
+        mask_permuted = attention_mask.unsqueeze(1)  # [batch_size, 1, seq_len]
+
+        # Replacing padded positions with negative infinity to ensure they are correctly ignored by max pooling.
+        x_masked = torch.where(mask_permuted, x_permuted, torch.tensor(float('-inf'), device=x.device))
+
+        x_pooled = torch.nn.functional.adaptive_max_pool1d(x_masked, self.out_seq_len)
+
+        # In the edge case where a pooling window is entirely masked (-inf), reset its output to 0.
+        x_pooled[x_pooled == float('-inf')] = 0
+
+        # Permute back
         out = x_pooled.permute(0, 2, 1)  # [batch_size, out_seq_len, in_channels]
         return out
 
@@ -131,15 +140,27 @@ class AvgPoolConvLayer(AbstractReductionLayer):
 
     @override
     def forward(self, x: Encodings_Batch_PerResidue_T, attention_mask: AttentionMask_Batch_T):
-        x = x * attention_mask.unsqueeze(-1)
+        # x: [batch_size, seq_len, in_channels]
+        # attention_mask: [batch_size, seq_len], boolean
 
-        # Only interpolate/pool the sequence to the output length
-        # Assuming x shape: [batch_size, seq_len, in_channels]
-        x = x.permute(0, 2, 1)  # [batch_size, in_channels, seq_len]
-        x_pooled = torch.nn.functional.adaptive_avg_pool1d(
-            x, self.out_seq_len
-        )
-        out = x_pooled.permute(0, 2, 1)  # [batch_size, out_seq_len, in_channels]
+        # Transpose for 1D convolution/pooling operations
+        x_permuted = x.permute(0, 2, 1)  # [batch_size, in_channels, seq_len]
+        mask_permuted = attention_mask.unsqueeze(1)  # [batch_size, 1, seq_len]
+
+        x_masked = x_permuted * mask_permuted.float()
+
+        # Calculate the sum in each pooling window by taking the average and undoing the division
+        sum_in_window = torch.nn.functional.adaptive_avg_pool1d(x_masked, self.out_seq_len)
+
+        # Calculate the number of valid (unmasked) items in each window by averaging the mask.
+        count_in_window = torch.nn.functional.adaptive_avg_pool1d(mask_permuted.float(), self.out_seq_len)
+
+        epsilon = 1e-9  # To avoid division by zero for windows that are fully masked.
+
+        correct_avg = sum_in_window / (count_in_window + epsilon)
+
+        # Transpose back
+        out = correct_avg.permute(0, 2, 1)  # [batch_size, out_seq_len, in_channels]
         return out
 
 

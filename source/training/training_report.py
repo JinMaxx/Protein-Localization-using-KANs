@@ -50,7 +50,8 @@ def _find_latest_figures(directory: str) -> List[str]:
 def generate_training_report(
         model: AbstractModel,
         best_metrics: Optional[Metrics],
-        figures_save_dir: str
+        figures_save_dir: str,
+        additional_texts: Optional[List[Tuple[Optional[str],str]]] = None
 ):
     """
     Gathers the latest training artifacts and generates a consolidated PDF report.
@@ -71,6 +72,10 @@ def generate_training_report(
 
     text_sections.append(("Model Configuration", config_summary))
     text_sections.append(("Memory Size:", f"{model.memory_size():.3f} MB"))
+
+    if additional_texts is not None:
+        for additional_text in additional_texts:
+            text_sections.append(additional_text)
 
     image_paths = sorted(_find_latest_figures(report_figures_dir))
 

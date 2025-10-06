@@ -9,7 +9,7 @@ https://github.com/HannesStark/protein-localization/blob/master/models/light_att
 The module includes:
 - AbstractLightAttention: An ABC that defines the core Light Attention mechanism.
 - LightAttentionFFN: A specific FFN designed to replicate the classifier from the original paper.
-- LightAttentionLAMLP: A concrete implementation that combines AbstractLightAttention with the original LightAttentionFFN.
+- LightAttention: A concrete implementation that combines AbstractLightAttention with the original LightAttentionFFN.
 - LightAttentionFastKAN: A concrete implementation that combines AbstractLightAttention with FastKAN.
 """
 
@@ -230,7 +230,7 @@ class AbstractLightAttention(AbstractSequenceModel, ABC):
 
 
 
-class LightAttentionLAMLP(AbstractLightAttention):
+class LightAttention(AbstractLightAttention):
     """
     A concrete implementation of the original Light Attention architecture.
 
@@ -240,7 +240,7 @@ class LightAttentionLAMLP(AbstractLightAttention):
 
     def __init__(self,
             in_channels: int,
-            in_seq_len: int,
+            in_seq_len: int = None,
             out_channels: Optional[int] = None,
             kernel_size: int = None,
             conv_dropout_rate: float = None,
@@ -254,7 +254,7 @@ class LightAttentionLAMLP(AbstractLightAttention):
             out_channels = out_channels,
             in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             kernel_size = kernel_size if kernel_size is not None else config.kernel_size,
-            conv_dropout_rate = conv_dropout_rate if kernel_size is not None else config.conv_dropout_rate,
+            conv_dropout_rate = conv_dropout_rate if conv_dropout_rate is not None else config.conv_dropout_rate,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             ffn_layer_class = LightAttentionFFN,
             ffn_layer_kwargs = dict(
@@ -296,7 +296,7 @@ class LightAttentionFastKAN(AbstractLightAttention):
             out_channels = out_channels,
             in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             kernel_size = kernel_size if kernel_size is not None else config.kernel_size,
-            conv_dropout_rate = conv_dropout_rate if kernel_size is not None else config.conv_dropout_rate,
+            conv_dropout_rate = conv_dropout_rate if conv_dropout_rate is not None else config.conv_dropout_rate,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             ffn_layer_class = FastKAN,
             ffn_layer_kwargs = dict(

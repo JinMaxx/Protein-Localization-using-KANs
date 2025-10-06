@@ -121,7 +121,7 @@ def evaluate_models(
         )
 
         metrics.save_metrics_to_tsv(
-            file_path = metrics_file_path,
+            file_path = f"{metrics_file_path}/{model.name()}/{model.id()}",
             model_id = model.id(),
             model_name = model.name(),
             memory_size = model.memory_size(),

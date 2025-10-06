@@ -97,7 +97,7 @@ class AbstractFiguresCollection(ABC):
         clear = kwargs.pop("clear", True)
         errors: List[Tuple[BaseException, _AbstractFigure]] = []
         for figure in self.__figures:
-            try: figure.update( **kwargs)
+            try: figure.update(**kwargs)
             except Exception as error:
                 errors.append((error, figure))
                 figure.remove()  # remove faulty figures
@@ -270,7 +270,12 @@ class _AbstractFigure(ABC):
             else: file_path: str = f"{save_dir}/{self.name()}_{self._identifier}"
             image_path: str = f"{file_path}.png"
             object_path = f"{file_path}.pkl"
-            self._fig.write_image(image_path)  # Requires 'kaleido' installed
+            self._fig.write_image(  # Requires 'kaleido' installed
+                image_path,
+                width = 900, # 3:2 ratio
+                height = 600,
+                scale = 4.2  # nice resolution
+            )
             with open(object_path, "wb") as object_file_handle:
                 pickle.dump(self._fig, object_file_handle, protocol=pickle.HIGHEST_PROTOCOL)  # type: ignore[arg-type]
             return image_path
@@ -379,6 +384,8 @@ class MultiFigure(_AbstractFigure):
     @override
     def update(self, **kwargs) -> None:
         """Updates all sub-figures and refreshes the combined plot."""
+        identifier: Optional[str] = kwargs.get("identifier")
+        if identifier is not None: self._identifier = identifier
         for subfigure in self.__figures:
             subfigure.update(**kwargs)
         self.__refresh_traces()

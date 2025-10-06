@@ -29,7 +29,7 @@ def generate_evaluation_report(
 
     :return: The file path of the generated evaluation report.
     """
-    report_title = f"Final Evaluation Report: {model.name()}<br/>({model.uuid})"
+    report_title = f"Final Evaluation Report: {model.name()}<br/>{model.uuid}"
 
     text_sections = [
         ("Test Set Performance", metrics.summary()),
