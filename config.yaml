@@ -689,7 +689,7 @@ LightAttentionFastKAN:
   kernel_size: 9
   conv_dropout_rate: 0.25
   grid_diff: 1.0  # smaller window for less noise
-  num_grids: 8  # expressive activation function
+  num_grids: 10  # expressive activation function
 
   test_parameters:
     hidden_layers: !HiddenLayers
