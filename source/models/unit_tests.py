@@ -3,6 +3,7 @@ import torch
 import tempfile
 import unittest
 
+from models.ffn import FastKANpp
 from source.models.other.light_attention import LightAttentionFFN, LightAttention, LightAttentionFastKAN
 from source.models.other.attention_lstm_hybrid import AttentionLstmHybridFastKAN
 from source.models.other.lstm_reduction_hybrid import LstmAttentionReductionHybridFastKAN
@@ -111,9 +112,15 @@ class TestModelCreation(unittest.TestCase):
         self.assertIsNotNone(model)
 
 
-    def test_create_mlppp(self):
+    def test_create_mlp_pp(self):
         """Tests the creation of an MLPpp model."""
-        model = MLPpp(in_seq_len=self.in_channels)
+        model = MLPpp(in_channels=self.in_channels)
+        self.assertIsNotNone(model)
+
+
+    def test_create_fastkan_pp(self):
+        """Tests the creation of a FastKANpp model."""
+        model = FastKANpp(in_channels=self.in_channels)
         self.assertIsNotNone(model)
 
 
@@ -167,11 +174,16 @@ class TestModelSaveAndLoad(unittest.TestCase):
 
 
     def setUp(self):
-        from source.models.reduced_ffn import MaxPoolFastKAN
-        self.model = MaxPoolFastKAN(
+        # from source.models.reduced_ffn import MaxPoolFastKAN
+        # self.model = MaxPoolFastKAN(
+        #     in_channels = 1024,
+        #     in_seq_len = 1023,
+        #     reduced_seq_len = 20,
+        #     hidden_layers = HiddenLayers(HiddenLayers.Type.RELATIVE, (0.06, 1))
+        # )
+        from source.models.ffn import MLPpp
+        self.model = MLPpp(
             in_channels = 1024,
-            in_seq_len = 1023,
-            reduced_seq_len = 20,
             hidden_layers = HiddenLayers(HiddenLayers.Type.RELATIVE, (0.06, 1))
         )
 

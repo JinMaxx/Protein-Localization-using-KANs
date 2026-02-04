@@ -171,9 +171,9 @@ def per_protein_collate_function(
         # [seq_len, in_channels] -> [in_channels]
 
         match pool_method:
-            case PoolingMethod.Mean: return torch.mean(valid_encoding, dim=0).values
+            case PoolingMethod.Mean: return torch.mean(valid_encoding, dim=0)
             case PoolingMethod.Max:  return torch.max(valid_encoding, dim=0).values
-            case PoolingMethod.Sum:  return torch.sum(valid_encoding, dim=0).values
+            case PoolingMethod.Sum:  return torch.sum(valid_encoding, dim=0)
             # case _: raise ValueError(f"Invalid pooling method: {pool_method}")
 
 

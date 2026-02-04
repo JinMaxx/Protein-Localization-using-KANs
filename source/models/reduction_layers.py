@@ -165,7 +165,7 @@ class AvgPoolConvLayer(AbstractReductionLayer):
 
 
 
-class LinearReductionLayer(AbstractReductionLayer):
+class LinearLayer(AbstractReductionLayer):
     """
     Reduces sequence length using a learnable Linear layer.
 
@@ -189,7 +189,7 @@ class LinearReductionLayer(AbstractReductionLayer):
             device = device
         )
         if self.in_channels != self.out_channels:
-            raise ValueError("LinearReductionLayer as designed does not support changing the channel dimension.")
+            raise ValueError("LinearLayer as designed does not support changing the channel dimension.")
         # Learnable projection matrix: projects in_seq_len → out_seq_len
         self.proj = torch.nn.Linear(self.in_seq_len, self.out_seq_len, bias=True, device=self.device)
 
@@ -350,7 +350,7 @@ class PositionalWeightedConvLayer(AbstractReductionLayer):
 
 
 
-class UNetReductionLayer(AbstractReductionLayer):
+class UNetLayer(AbstractReductionLayer):
     """
     Reduces sequence length using a U-Net-like encoder-decoder architecture.
 

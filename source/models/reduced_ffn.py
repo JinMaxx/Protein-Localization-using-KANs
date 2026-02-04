@@ -27,8 +27,8 @@ from source.models.reduction_layers import (
     PositionalWeightedConvLayer,
     MaxPoolConvLayer,
     AvgPoolConvLayer,
-    LinearReductionLayer,
-    UNetReductionLayer,
+    LinearLayer,
+    UNetLayer,
     AttentionLayer
 )
 
@@ -306,7 +306,7 @@ class AvgPoolMLP(AbstractReducedFFN):
 
 # noinspection DuplicatedCode
 class LinearFastKAN(AbstractReducedFastKAN):
-    """A model combining a `LinearReductionLayer` and a `FastKAN` FFN."""
+    """A model combining a `LinearLayer` and a `FastKAN` FFN."""
 
     def __init__(self,
             in_channels: int,
@@ -326,7 +326,7 @@ class LinearFastKAN(AbstractReducedFastKAN):
             in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class = LinearReductionLayer,
+            reduction_layer_class = LinearLayer,
             grid_diff = grid_diff if grid_diff is not None else config.grid_diff,
             num_grids = num_grids if num_grids is not None else config.num_grids
         )
@@ -340,7 +340,7 @@ class LinearFastKAN(AbstractReducedFastKAN):
 
 # noinspection DuplicatedCode
 class LinearMLP(AbstractReducedFFN):
-    """A model combining a `LinearReductionLayer` for reduction and a standard `MLP` FFN."""
+    """A model combining a `LinearLayer` for reduction and a standard `MLP` FFN."""
 
     def __init__(self,
             in_channels: int,
@@ -358,7 +358,7 @@ class LinearMLP(AbstractReducedFFN):
             in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
             reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class = LinearReductionLayer,
+            reduction_layer_class = LinearLayer,
             ffn_layer_class = MLP,
         )
 
@@ -544,7 +544,7 @@ class PositionalMLP(AbstractReducedFFN):
 
 # noinspection DuplicatedCode
 class UNetFastKAN(AbstractReducedFastKAN):
-    """A model combining a `UNetReductionLayer` and a `FastKAN` FFN."""
+    """A model combining a `UNetLayer` and a `FastKAN` FFN."""
 
     def __init__(self,
             in_channels: int,
@@ -569,7 +569,7 @@ class UNetFastKAN(AbstractReducedFastKAN):
             reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class = UNetReductionLayer,
+            reduction_layer_class = UNetLayer,
             reduction_layer_kwargs = dict(
                 kernel_size = self.kernel_size
             ),
@@ -586,7 +586,7 @@ class UNetFastKAN(AbstractReducedFastKAN):
 
 # noinspection DuplicatedCode
 class UNetMLP(AbstractReducedFFN):
-    """A model combining a `UNetReductionLayer` for reduction and a standard `MLP` FFN."""
+    """A model combining a `UNetLayer` for reduction and a standard `MLP` FFN."""
 
     def __init__(self,
             in_channels: int,
@@ -609,7 +609,7 @@ class UNetMLP(AbstractReducedFFN):
             reduced_seq_len = reduced_seq_len if reduced_seq_len is not None else config.reduced_seq_len,
             reduced_channels = reduced_channels if reduced_channels is not None else config.reduced_channels,
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
-            reduction_layer_class = UNetReductionLayer,
+            reduction_layer_class = UNetLayer,
             reduction_layer_kwargs = dict(
                 kernel_size = self.kernel_size
             ),

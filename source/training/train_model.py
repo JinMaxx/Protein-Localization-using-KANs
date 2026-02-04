@@ -200,8 +200,8 @@ def __train(
                         model_name = model.name(),
                         memory_size = model.memory_size(),
                         epoch = epoch,
-                        train_loss_per_sample=train_loss_per_sample,
-                        validation_loss_per_sample=val_metrics.loss_per_sample,
+                        train_loss_per_sample = train_loss_per_sample,
+                        validation_loss_per_sample = val_metrics.loss_per_sample,
                         model_params = model.get_init_params(),
                         is_better_epoch = save_state.current_epoch() == epoch
                     )
@@ -613,7 +613,7 @@ def main(model: Type[AbstractModel] | str,
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    from source.models.ffn import FastKAN as __ModelClass
+    from source.models.ffn import MLPpp as __ModelClass
 
     load_dotenv()
 

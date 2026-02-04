@@ -147,6 +147,34 @@ FastKAN: # input layer size per residue is 70 * 1024 = 71_680
       step: 1
 
 
+FastKAN_Per_Protein:
+
+  in_seq_len: 1024  # Dimension of ProtT5
+  hidden_layers: !HiddenLayersRelative
+    num_layers: 1
+    relative_size: 0.12
+  grid_diff: 1.5
+  num_grids: 10
+
+  test_parameters:
+    hidden_layers: !HiddenLayers
+      num_layers: !RangeInt
+        min: 0
+        max: 4
+      layer_size_percentage: !RangeFloat
+        min: 0.04
+        max: 0.14
+        step: 0.02
+    grid_diff: !RangeFloat
+      min: 1.5
+      max: 2.5
+      step: 0.5
+    num_grids: !RangeInt
+      min: 4
+      max: 12
+      step: 2
+
+
 MLP:
 
   in_seq_len: 20
@@ -170,12 +198,12 @@ MLP_Per_Protein:
   in_seq_len: 1024  # Dimension of ProtT5
   hidden_layers: !HiddenLayersRelative
     num_layers: 2
-    relative_size: 0.4
+    relative_size: 0.8
 
   test_parameters:
     hidden_layers: !HiddenLayers
       num_layers: !RangeInt
-        min: 1
+        min: 0
         max: 5
       layer_size_percentage: !RangeFloat
         min: 0.3

@@ -70,6 +70,8 @@ class AbstractModel(nn.Module, ABC):
         self.in_channels: int = in_channels
         self.uuid: str = f"{str(uuid.uuid4())}"
         self.device: device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if device.type == "cuda": print("Using CUDA...")
+        elif device.type == "cpu": print("CUDA not available, using CPU. Performance may be slower")
 
 
     @classmethod
@@ -137,7 +139,7 @@ class AbstractModel(nn.Module, ABC):
         params = inspect.signature(self.__init__).parameters  # Get __init__ parameter info
         param_names = list(params.keys())
         # Return a dictionary of parameter names and their current values
-        return {name: getattr(self, name) for name in param_names}
+        return {name: getattr(self, name) for name in param_names if name != "_"}
 
 
     def save(self, save_dir: str, identifier: Optional[str], **kwargs: Any) -> str:
@@ -296,7 +298,14 @@ def _create_test_model_class(model_class: Type[AbstractTunableModel], **kwargs) 
             # Introspect the parent's __init__ to get the correct parameters for saving.
             # Need to overwrite the class in inspect.signature(...)
             params = inspect.signature(model_class.__init__).parameters
-            param_names = [name for name in params.keys() if name != "self"]
+            # Filter out 'self', variable arguments like **kwargs, and unused params starting with _
+            param_names = [
+                name for name, param in params.items()
+                if name != "self"
+                   and param.kind != inspect.Parameter.VAR_KEYWORD  # e.g. **kwargs
+                   and param.kind != inspect.Parameter.VAR_POSITIONAL # e.g. *args
+                   and not name.startswith("_")
+            ]
             # Combine params from signature with the baked-in kwargs
             return {name: getattr(self, name) for name in param_names}
 

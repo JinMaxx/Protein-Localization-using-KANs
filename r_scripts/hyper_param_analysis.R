@@ -23,7 +23,8 @@ architectures_comparison <- c(
   "Attention",
   "UNet",
   "Linear",
-  "Positional"
+  "Positional",
+  "pp"
   #"AttentionLstmHybrid",
   #"LstmReductionHybrid",
   #"LightAttention"
@@ -31,7 +32,7 @@ architectures_comparison <- c(
 
 scatterplot_facet_order <- c(
   "MaxPool", "AvgPool", "Linear", "Attention", "Positional", "UNet",
-  "AttentionLstmHybrid", "LstmReductionHybrid", "LightAttention"
+  "AttentionLstmHybrid", "LstmReductionHybrid", "LightAttention", "pp"
 )
 
 metrics_to_summarize <- c(
@@ -84,11 +85,14 @@ average_performance <- average_performance[, class_weight := NULL]
 print(average_performance[, ])
 
 # Create columns for base architecture and FFN type
-suffix_pattern <- paste(ffn_suffixes, collapse = "|")
+ffn_pattern <- paste(ffn_suffixes, collapse = "|")
 
 # Extract Base Architecture and FFN type
-average_performance[, ffn_type := str_extract(model_class, suffix_pattern)]
-average_performance[, base_architecture := str_remove(model_class, suffix_pattern)]
+average_performance[, ffn_type := str_extract(model_class, ffn_pattern)]
+average_performance[, base_architecture := str_remove(model_class, ffn_pattern)]
+# Clean up leftover leading/trailing underscores (handles both prefix and suffix leftovers)
+average_performance[, base_architecture := str_remove_all(base_architecture, "^_|_$")]
+
 average_performance[is.na(ffn_type), ffn_type := "Other"]
 
 # Manual corrections for specific architectures that don't follow the suffix convention
@@ -326,6 +330,7 @@ save_table <- function(table_object, file_identifier) {
 barchart_summary_data <- architecture_summary[base_architecture %in% architectures_comparison]
 
 scatterplot_trial_data <- average_performance
+# scatterplot_trial_data <- average_performance[base_architecture %in% architectures_comparison]
 scatterplot_trial_data$base_architecture <- factor(scatterplot_trial_data$base_architecture, levels = scatterplot_facet_order)
 
 

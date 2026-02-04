@@ -26,7 +26,8 @@ from typing_extensions import List, override, Tuple, cast, Sequence
 from source.models.abstract import AbstractSequenceModel
 from source.training.utils.hidden_layers import HiddenLayers
 from source.data_scripts.read_data import num_classes
-from source.training.utils.collate_functions import per_protein_collate_function, per_residue_collate_function
+from source.training.utils.collate_functions import per_protein_collate_function, per_residue_collate_function, \
+    PoolingMethod
 
 from source.config import (
     AbstractFFNConfig,
@@ -295,10 +296,11 @@ class MLPpp(MLP):  # Per Protein
     """
 
     def __init__(self,
-            in_seq_len: int = None,
+            in_channels: int,
             hidden_layers: HiddenLayers = None,
             out_channels: int = num_classes,
-            **_):
+            pool_method: PoolingMethod = PoolingMethod.Mean,
+            **_):  # ignoring the in_seq_len parameter
         """
         Initializes the Per-Protein MLP.
 
@@ -306,10 +308,12 @@ class MLPpp(MLP):  # Per Protein
         function produces a single channel.
         """
         config = self.get_config()
+        self.pool_method = pool_method
+
 
         super().__init__(
-            in_channels = 1,
-            in_seq_len = in_seq_len if in_seq_len is not None else config.in_seq_len,
+            in_channels = in_channels,
+            in_seq_len = 1,  # hardcoded to 1
             hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
             out_channels = out_channels
         )
@@ -325,4 +329,49 @@ class MLPpp(MLP):  # Per Protein
         """
         Overrides the default collation to use the `per_protein_collate_function`, which treats each sequence as a single sample.
         """
-        return per_protein_collate_function(batch)
+        return per_protein_collate_function(batch, pool_method=self.pool_method)
+
+
+
+class FastKANpp(FastKAN):  # Per Protein
+    """
+    A specialized "Per-Protein" KAN that uses a custom data collation strategy.
+
+    This model is designed for scenarios where each protein sequence is treated as a
+    single feature vector, rather than a sequence of token embeddings.
+    """
+
+    def __init__(self,
+            in_channels: int,
+            hidden_layers: HiddenLayers = None,
+            out_channels: int = num_classes,
+            pool_method: PoolingMethod = PoolingMethod.Mean,
+            **_): # ignoring the in_channels parameter
+        """
+        Initializes the Per-Protein FastKAN.
+
+        Note: `in_channels` is hardcoded to 1, as the per-protein collate
+        function produces a single channel.
+        """
+        config = self.get_config()
+        self.pool_method = pool_method
+
+        super().__init__(
+            in_channels = in_channels,  # hardcoded to 1
+            in_seq_len = 1,  # hardcoded to 1
+            hidden_layers = hidden_layers if hidden_layers is not None else config.hidden_layers,
+            out_channels = out_channels
+        )
+
+
+    @classmethod
+    @override
+    def config_type(cls) -> ConfigType: return ConfigType.FastKAN_PP
+
+
+    @override
+    def collate_function(self, batch: List[Data_T]) -> Tuple[Encodings_Batch_T, Labels_Batch_T, AttentionMask_Batch_T]:
+        """
+        Overrides the default collation to use the `per_protein_collate_function`, which treats each sequence as a single sample.
+        """
+        return per_protein_collate_function(batch, pool_method=self.pool_method)

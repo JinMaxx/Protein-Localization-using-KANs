@@ -69,6 +69,7 @@ class ConfigType(Enum):
     MLP = "MLP"
     MLP_PP = "MLP_Per_Protein"
     FastKAN = "FastKAN"
+    FastKAN_PP = "FastKAN_Per_Protein"
     LightAttentionFFN = "LightAttentionFFN"
 
     MaxPoolFastKAN = "MaxPoolFastKAN"
@@ -684,6 +685,12 @@ class FastKANConfig(AbstractKANConfig, AbstractFFNConfig):
 
 
 @dataclass
+class FastKANPPConfig(AbstractKANConfig, AbstractFFNConfig):
+    pass
+
+
+
+@dataclass
 class MLPConfig(AbstractFFNConfig):
     pass
 
@@ -1002,7 +1009,7 @@ def _construct_hidden_layers_relative(loader: yaml.Loader, node: yaml.MappingNod
         raise TypeError(f"!HiddenLayersRelative 'num_layers' must be an integer, but got {type(num_layers).__name__}.")
     if not isinstance(relative_size, (float, int)):
         raise TypeError(f"!HiddenLayersRelative 'relative_size' must be a float or int, but got {type(relative_size).__name__}.")
-    if not num_layers > 0:
+    if not num_layers >= 0:
         raise ValueError(f"'num_layers' must be positive, but got {num_layers}.")
     if isinstance(relative_size, int): # Allow integer percentages (1-100) and convert them, or standard floats (0.0-1.0)
         if not 1 <= relative_size <= 100:
@@ -1088,6 +1095,7 @@ def parse_config(config_type: ConfigType, config_path: str = __config_path):
         case ConfigType.MLP: config = MLPConfig(**yaml_dict[ConfigType.MLP.value])
         case ConfigType.MLP_PP: config = MLPPPConfig(**yaml_dict[ConfigType.MLP_PP.value])
         case ConfigType.FastKAN: config = FastKANConfig(**yaml_dict[ConfigType.FastKAN.value])
+        case ConfigType.FastKAN_PP: config = FastKANPPConfig(**yaml_dict[ConfigType.FastKAN_PP.value])
         case ConfigType.LightAttentionFFN: config = LightAttentionFFNConfig(**yaml_dict[ConfigType.LightAttentionFFN.value])
 
         case ConfigType.MaxPoolFastKAN: config = MaxPoolFastKANConfig(**yaml_dict[ConfigType.MaxPoolFastKAN.value])
