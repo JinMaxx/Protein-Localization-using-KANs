@@ -1,6 +1,7 @@
 # Protein Localization Prediction using Kolmogorov-Arnold Networks
 
 Colab: https://colab.research.google.com/github/JinMaxx/Protein-Localization-using-KANs/blob/main/colab_notebook.ipynb
+Thesis.pdf: https://cdn.jsdelivr.net/gh/JinMaxx/Protein-Localization-using-KANs@main/Thesis.pdf
 
 ---
 ## Project Details
